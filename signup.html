@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Create a StudyTool account" />
+  <title>Register — StudyTool</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Full-page preloader -->
+  <div id="preloader" class="preloader">
+    <div class="spinner-ring"></div>
+  </div>
+
+  <!-- Register card -->
+  <div class="auth-page">
+    <div class="auth-card">
+
+      <div class="auth-logo">
+        <h1 id="app-title">📚 StudyTool</h1>
+        <p>Create your student account</p>
+      </div>
+
+      <!-- Error / success banner -->
+      <div id="auth-alert" class="auth-error" role="alert"></div>
+
+      <form id="register-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="full-name">Full Name</label>
+          <input class="form-input" type="text" id="full-name"
+                 placeholder="Your full name" required autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Email Address</label>
+          <input class="form-input" type="email" id="email"
+                 placeholder="you@example.com" required autocomplete="email" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input class="form-input" type="password" id="password"
+                 placeholder="Minimum 8 characters" required minlength="8"
+                 autocomplete="new-password" />
+          <div class="form-hint">Must be at least 8 characters.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="confirm-password">Confirm Password</label>
+          <input class="form-input" type="password" id="confirm-password"
+                 placeholder="Repeat your password" required
+                 autocomplete="new-password" />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full btn-lg" id="register-btn">
+          <span class="btn-spinner"></span>
+          <span class="btn-text">Create Account</span>
+        </button>
+      </form>
+
+      <div style="text-align:center;margin-top:1.25rem">
+        <p style="color:var(--text-muted);font-size:0.875rem;margin:0">
+          Already have an account? <a href="login.html">Sign in</a>
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container" role="status" aria-live="polite"></div>
+
+  <!-- Supabase UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- App config -->
+  <script src="config.js"></script>
+
+  <script>
+    /* ── Shared helpers ── */
+    const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+    if (window.APP_NAME) document.getElementById('app-title').textContent = '📚 ' + window.APP_NAME;
+
+    function hidePreloader() {
+      setTimeout(() => document.getElementById('preloader')?.classList.add('hidden'), 300);
+    }
+    function btnLoading(btn, on) {
+      if (!btn) return;
+      btn.classList.toggle('loading', on);
+      btn.disabled = on;
+    }
+    function showAlert(msg, type) {
+      const el = document.getElementById('auth-alert');
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.add('show');
+      if (type === 'success') {
+        el.style.cssText =
+          'display:block;background:#ebfbee;border-color:#b2f2bb;color:#2f9e44';
+      } else {
+        el.style.cssText = '';
+      }
+    }
+    function clearAlert() {
+      const el = document.getElementById('auth-alert');
+      if (el) { el.classList.remove('show'); el.textContent = ''; el.style.cssText = ''; }
+    }
+
+    /* ── Redirect if already authenticated ── */
+    sb.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        window.location.replace('index.html');
+      } else {
+        hidePreloader();
+      }
+    });
+
+    /* ── Register form ── */
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearAlert();
+
+      const btn     = document.getElementById('register-btn');
+      const name    = document.getElementById('full-name').value.trim();
+      const email   = document.getElementById('email').value.trim();
+      const pass    = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm-password').value;
+
+      // Client-side validation
+      if (!name)            { showAlert('Please enter your full name.');                    return; }
+      if (pass !== confirm) { showAlert('Passwords do not match. Please try again.');       return; }
+      if (pass.length < 8)  { showAlert('Password must be at least 8 characters long.');   return; }
+
+      btnLoading(btn, true);
+
+      const { error } = await sb.auth.signUp({
+        email,
+        password: pass,
+        options: {
+          data: { full_name: name },
+        },
+      });
+
+      btnLoading(btn, false);
+
+      if (error) {
+        showAlert(error.message);
+      } else {
+        // Show confirmation — user must verify email before logging in
+        showAlert(
+          '✅ Account created! Check your email and click the confirmation link, then sign in.',
+          'success'
+        );
+        document.getElementById('register-form').reset();
+      }
+    });
+  </script>
+</body>
+</html>
