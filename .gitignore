@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+netlify/functions/node_modules/
+
+# Netlify
+.netlify/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Env / secrets (never commit real keys)
+.env
+.env.local
