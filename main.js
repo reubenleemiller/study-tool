@@ -414,7 +414,7 @@ function openForgotModal() {
           if (!email) return;
           btnLoading(btn, true);
           const { error } = await sb.auth.resetPasswordForEmail(email, {
-            redirectTo: `${location.origin}${location.pathname}#/set-password`,
+            redirectTo: `${location.origin}/set-password.html`,
           });
           btnLoading(btn, false);
           if (alertEl) {
@@ -1535,7 +1535,7 @@ function renderInviteTab(container) {
         body:    JSON.stringify({
           email,
           name: name || '',
-          redirectTo: `${location.origin}${location.pathname}#/set-password`,
+          redirectTo: `${location.origin}/set-password.html`,
         }),
       });
       const json = await res.json();

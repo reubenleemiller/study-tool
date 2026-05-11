@@ -36,6 +36,9 @@ exports.handler = async (event) => {
   if (!email) {
     return { statusCode: 400, body: JSON.stringify({ error: 'email is required.' }) };
   }
+  if (!redirectTo) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'redirectTo is required.' }) };
+  }
 
   // Create admin Supabase client (service role — server-side only)
   const adminSb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -44,7 +47,7 @@ exports.handler = async (event) => {
 
   // Invite user via Supabase Admin API
   const { data, error } = await adminSb.auth.admin.inviteUserByEmail(email, {
-    redirectTo: redirectTo || `${SUPABASE_URL.replace('.supabase.co', '.netlify.app')}#/set-password`,
+    redirectTo,
     data: { full_name: name },
   });
 
