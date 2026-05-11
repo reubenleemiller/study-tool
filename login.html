@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sign in to StudyTool" />
   <title>Sign In — StudyTool</title>
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+        integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13/zFNhlV+n/rmow=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <!-- App stylesheet -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -14,40 +20,56 @@
     <div class="spinner-ring"></div>
   </div>
 
-  <!-- Login card -->
   <div class="auth-page">
     <div class="auth-card">
 
+      <!-- Logo -->
       <div class="auth-logo">
-        <h1 id="app-title">📚 StudyTool</h1>
+        <h1 id="app-title"><i class="fa-solid fa-book-open"></i> StudyTool</h1>
         <p>Welcome back — sign in to continue</p>
       </div>
 
-      <!-- Error / success banner -->
+      <!-- Alert banner -->
       <div id="auth-alert" class="auth-error" role="alert"></div>
 
-      <form id="login-form" novalidate>
+      <form id="login-form" novalidate autocomplete="on">
+
+        <!-- Email with live-validation checkmark -->
         <div class="form-group">
-          <label class="form-label" for="email">Email Address</label>
-          <input class="form-input" type="email" id="email"
-                 placeholder="you@example.com" required autocomplete="email" />
+          <label class="form-label" for="email">
+            <i class="fa-regular fa-envelope"></i> Email Address
+          </label>
+          <div class="input-wrap">
+            <input class="form-input" type="email" id="email"
+                   placeholder="you@example.com" required autocomplete="email" />
+            <i class="fa-solid fa-circle-check input-valid-icon" id="email-valid-icon"
+               aria-hidden="true" title="Valid email address"></i>
+          </div>
         </div>
 
+        <!-- Password -->
         <div class="form-group">
-          <label class="form-label" for="password">Password</label>
-          <input class="form-input" type="password" id="password"
-                 placeholder="••••••••" required autocomplete="current-password" />
+          <label class="form-label" for="password">
+            <i class="fa-solid fa-lock"></i> Password
+          </label>
+          <div class="input-wrap">
+            <input class="form-input" type="password" id="password"
+                   placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+                   required autocomplete="current-password" />
+          </div>
         </div>
 
         <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-btn">
           <span class="btn-spinner"></span>
-          <span class="btn-text">Sign In</span>
+          <span class="btn-text">
+            <i class="fa-solid fa-right-to-bracket"></i> Sign In
+          </span>
         </button>
       </form>
 
       <div style="text-align:center;margin-top:1.25rem;display:flex;flex-direction:column;gap:0.6rem">
         <a href="reset-password.html" class="btn btn-ghost btn-sm" style="text-decoration:none">
-          Forgot your password?
+          <i class="fa-solid fa-key"></i> Forgot your password?
         </a>
         <p style="color:var(--text-muted);font-size:0.875rem;margin:0">
           Don't have an account? <a href="signup.html">Register here</a>
@@ -57,81 +79,75 @@
     </div>
   </div>
 
-  <!-- Toast notifications -->
   <div id="toast-container" role="status" aria-live="polite"></div>
 
-  <!-- Supabase UMD -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <!-- App config (edit with your real Supabase keys) -->
   <script src="config.js"></script>
-
   <script>
-    /* ── Shared helpers ── */
+    /* ── Init ── */
     const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    if (window.APP_NAME) {
+      document.getElementById('app-title').innerHTML =
+        '<i class="fa-solid fa-book-open"></i> ' + window.APP_NAME;
+    }
 
-    if (window.APP_NAME) document.getElementById('app-title').textContent = '📚 ' + window.APP_NAME;
-
+    /* ── Helpers ── */
     function hidePreloader() {
-      setTimeout(() => document.getElementById('preloader')?.classList.add('hidden'), 300);
+      setTimeout(function() {
+        var el = document.getElementById('preloader');
+        if (el) el.classList.add('hidden');
+      }, 300);
     }
     function btnLoading(btn, on) {
       if (!btn) return;
       btn.classList.toggle('loading', on);
       btn.disabled = on;
     }
-    function showAlert(msg, type) {
-      const el = document.getElementById('auth-alert');
+    function showAlert(msg) {
+      var el = document.getElementById('auth-alert');
       if (!el) return;
       el.textContent = msg;
       el.classList.add('show');
-      if (type === 'success') {
-        el.style.cssText =
-          'display:block;background:#ebfbee;border-color:#b2f2bb;color:#2f9e44';
-      } else {
-        el.style.cssText = ''; // revert to default danger style
-      }
+      el.style.cssText = '';
     }
     function clearAlert() {
-      const el = document.getElementById('auth-alert');
+      var el = document.getElementById('auth-alert');
       if (el) { el.classList.remove('show'); el.textContent = ''; el.style.cssText = ''; }
     }
+    function isValidEmail(v) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+    }
 
-    /* ── Redirect if already authenticated ── */
-    sb.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        window.location.replace('index.html');
-      } else {
-        hidePreloader();
-      }
+    /* ── Redirect if already logged in ── */
+    sb.auth.getSession().then(function(ref) {
+      var session = ref.data.session;
+      if (session) window.location.replace('index.html');
+      else hidePreloader();
+    });
+
+    /* ── Live email validation checkmark ── */
+    var emailInput = document.getElementById('email');
+    var emailIcon  = document.getElementById('email-valid-icon');
+    emailInput.addEventListener('input', function() {
+      emailIcon.classList.toggle('show', isValidEmail(emailInput.value.trim()));
     });
 
     /* ── Sign-in form ── */
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
       e.preventDefault();
-      const btn      = document.getElementById('login-btn');
-      const email    = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-
+      var btn      = document.getElementById('login-btn');
+      var email    = emailInput.value.trim();
+      var password = document.getElementById('password').value;
       clearAlert();
       btnLoading(btn, true);
-
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-
+      var ref = await sb.auth.signInWithPassword({ email: email, password: password });
       btnLoading(btn, false);
-
-      if (error) {
-        // Always show a friendly message for invalid credentials
-        showAlert('Invalid login credentials. Please check your email and password.');
-      } else {
-        // onAuthStateChange fires → redirect happens automatically below
-      }
+      if (ref.error) showAlert('Invalid login credentials. Please check your email and password.');
     });
 
-    /* ── Auth state listener ── */
-    sb.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        window.location.replace('index.html');
-      }
+    /* ── Redirect on successful auth ── */
+    sb.auth.onAuthStateChange(function(event, session) {
+      if (event === 'SIGNED_IN' && session) window.location.replace('index.html');
     });
   </script>
 </body>

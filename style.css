@@ -654,6 +654,63 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .katex { font-size: 1em !important; }
 .katex-display { overflow-x: auto; margin: 0.5em 0 !important; }
 
+/* ----- Input with inline validation icon ----- */
+.input-wrap { position: relative; }
+.input-wrap .form-input { padding-right: 2.5rem; }
+.input-valid-icon {
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+  color: var(--success);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  pointer-events: none;
+}
+.input-valid-icon.show { opacity: 1; }
+
+/* ----- Password Policy Checklist ----- */
+.pwd-policy {
+  list-style: none;
+  margin: 0.55rem 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+.pwd-policy li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: color 0.22s ease;
+  user-select: none;
+}
+.pwd-policy li .pi {                /* policy icon */
+  width: 14px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #ced4da;
+  transition: color 0.22s ease, transform 0.18s ease;
+  flex-shrink: 0;
+}
+.pwd-policy li.met        { color: var(--success); }
+.pwd-policy li.met .pi    { color: var(--success); transform: scale(1.15); }
+
+/* ----- Confirm-password match hint ----- */
+.pwd-match-hint {
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pwd-match-hint.show     { display: flex; }
+.pwd-match-hint.ok       { color: var(--success); }
+.pwd-match-hint.bad      { color: var(--danger);  }
+
 /* ----- Utility ----- */
 .text-muted   { color: var(--text-muted); }
 .text-center  { text-align: center; }
