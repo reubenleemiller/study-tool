@@ -214,7 +214,7 @@ async function router() {
   // Auth guard
   if (!PUBLIC_ROUTES.has(path) && !state.user) {
     hidePreloader();
-    navigate('/login');
+    window.location.replace('login.html');
     return;
   }
   if (path === '/login' && state.user) {
@@ -513,7 +513,7 @@ async function signOut() {
   await sb.auth.signOut();
   state.user    = null;
   state.profile = null;
-  navigate('/login');
+  window.location.replace('login.html');
 }
 
 /** Shared app header markup */
@@ -1584,7 +1584,7 @@ async function init() {
       }
     }
     if (event === 'SIGNED_OUT') {
-      navigate('/login');
+      window.location.replace('login.html');
     }
   });
 
