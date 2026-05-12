@@ -16,19 +16,21 @@ CREATE TABLE IF NOT EXISTS profiles (
   email      TEXT,
   full_name  TEXT,
   role       TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Auto-create a profile row when a new user signs up
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  INSERT INTO profiles (id, email, full_name, role)
+  INSERT INTO profiles (id, email, full_name, role, updated_at)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
-    'student'
+    'student',
+    NOW()
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
@@ -39,6 +41,24 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- Keep profile fields in sync when auth.users changes
+CREATE OR REPLACE FUNCTION handle_user_updated()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE profiles
+  SET email      = NEW.email,
+      full_name  = COALESCE(NEW.raw_user_meta_data->>'full_name', full_name),
+      updated_at = NOW()
+  WHERE id = NEW.id;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
+CREATE TRIGGER on_auth_user_updated
+  AFTER UPDATE OF email, raw_user_meta_data ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_user_updated();
 
 -- ─── Questions ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS questions (
@@ -51,7 +71,8 @@ CREATE TABLE IF NOT EXISTS questions (
   category       TEXT,
   difficulty     TEXT DEFAULT 'medium' CHECK (difficulty IN ('easy','medium','hard')),
   created_by     UUID REFERENCES auth.users ON DELETE SET NULL,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ─── Quiz Sessions ───────────────────────────────────────────
@@ -72,8 +93,73 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
   category        TEXT,
   started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at    TIMESTAMPTZ,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ─── updated_at trigger helper ─────────────────────────────
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS set_profiles_updated_at ON profiles;
+CREATE TRIGGER set_profiles_updated_at
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS set_questions_updated_at ON questions;
+CREATE TRIGGER set_questions_updated_at
+  BEFORE UPDATE ON questions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS set_quiz_sessions_updated_at ON quiz_sessions;
+CREATE TRIGGER set_quiz_sessions_updated_at
+  BEFORE UPDATE ON quiz_sessions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ─── Constraints & additional indexes ──────────────────────
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'questions_options_keys') THEN
+    ALTER TABLE questions
+      ADD CONSTRAINT questions_options_keys
+      CHECK (
+        jsonb_typeof(options) = 'object' AND
+        options ?& ARRAY['A','B','C','D']
+      );
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'questions_correct_answer_key') THEN
+    ALTER TABLE questions
+      ADD CONSTRAINT questions_correct_answer_key
+      CHECK (options ? correct_answer);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_sessions_non_negative') THEN
+    ALTER TABLE quiz_sessions
+      ADD CONSTRAINT quiz_sessions_non_negative
+      CHECK (
+        score >= 0 AND
+        total_questions >= 0 AND
+        current_index >= 0 AND
+        time_remaining >= 0 AND
+        time_limit >= 0 AND
+        score <= total_questions
+      );
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_sessions_completed_at') THEN
+    ALTER TABLE quiz_sessions
+      ADD CONSTRAINT quiz_sessions_completed_at
+      CHECK (status <> 'completed' OR completed_at IS NOT NULL);
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_lower ON profiles (lower(email));
 
 -- ─── Row-Level Security ──────────────────────────────────────
 

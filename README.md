@@ -8,14 +8,14 @@ A **production-ready, static HTML/CSS/JS** study tool for multiple-choice questi
 
 | Feature | Details |
 |---|---|
-| 🔐 Auth | Modal-based login, registration, password reset & invite flow |
-| 📝 Quiz Engine | Timed quizzes with pause / resume, shuffle, category filter |
-| 📊 Student Stats | Dashboard with totals, average %, best score |
-| 📖 History | Full history with per-item delete and bulk clear |
-| ⚙️ Admin Panel | Add / edit / delete questions, manage users, invite students |
-| 🧮 KaTeX | Math rendered in questions and review screens |
-| 💫 UX Polish | Page-level preloader, per-button spinners, toast notifications |
-| 📱 Responsive | Mobile-first layout, hamburger nav on small screens |
+| Auth | Modal-based login, registration, password reset & invite flow |
+| Quiz Engine | Timed quizzes with pause / resume, shuffle, category filter |
+| Student Stats | Dashboard with totals, average %, best score |
+| History | Full history with per-item delete and bulk clear |
+| Admin Panel | Add / edit / delete questions, manage users, invite students |
+| KaTeX | Math rendered in questions and review screens |
+| UX Polish | Page-level preloader, per-button spinners, toast notifications |
+| Responsive | Mobile-first layout, hamburger nav on small screens |
 
 ---
 

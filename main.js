@@ -50,11 +50,11 @@ function formatDate(iso) {
 
 /** Grade from percentage */
 function getGrade(pct) {
-  if (pct >= 90) return { grade: 'A+', emoji: '🏆' };
-  if (pct >= 80) return { grade: 'A',  emoji: '⭐' };
-  if (pct >= 70) return { grade: 'B',  emoji: '👍' };
-  if (pct >= 60) return { grade: 'C',  emoji: '📚' };
-  return { grade: 'D', emoji: '💪' };
+  if (pct >= 90) return { grade: 'A+', icon: 'trophy' };
+  if (pct >= 80) return { grade: 'A',  icon: 'star' };
+  if (pct >= 70) return { grade: 'B',  icon: 'thumbs-up' };
+  if (pct >= 60) return { grade: 'C',  icon: 'book-open' };
+  return { grade: 'D', icon: 'dumbbell' };
 }
 
 /** Safe HTML escape */
@@ -75,7 +75,7 @@ function renderConfigError(message) {
   if (root) {
     root.innerHTML =
       '<div class="empty-state">' +
-      '<div class="empty-state-icon">⚙️</div>' +
+      '<div class="empty-state-icon"><i class="fa-solid fa-gear"></i></div>' +
       '<div class="empty-state-title">App configuration required</div>' +
       '<p style="max-width:420px;margin:0 auto;color:var(--text-muted)">' + esc(msg) + '</p>' +
       '</div>';
@@ -113,10 +113,16 @@ function btnLoading(btn, on) {
 function toast(msg, type = 'info', ms = 3800) {
   const container = document.getElementById('toast-container');
   if (!container) return;
-  const icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
+  const icons = {
+    info: 'circle-info',
+    success: 'circle-check',
+    error: 'circle-xmark',
+    warning: 'triangle-exclamation',
+  };
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span>${icons[type] || ''}</span><span>${esc(msg)}</span>`;
+  const iconName = icons[type] || icons.info;
+  el.innerHTML = `<i class="fa-solid fa-${iconName}"></i><span>${esc(msg)}</span>`;
   container.appendChild(el);
   setTimeout(() => {
     el.style.animation = 'slideInRight 0.3s ease reverse';
@@ -276,7 +282,7 @@ async function renderLoginPage() {
     <div class="auth-page">
       <div class="auth-card">
         <div class="auth-logo">
-          <h1>📚 ${esc(APP.name)}</h1>
+          <h1><i class="fa-solid fa-book-open"></i> ${esc(APP.name)}</h1>
           <p>Your interactive study companion</p>
         </div>
 
@@ -388,7 +394,7 @@ async function renderLoginPage() {
     if (error) {
       showAlert(error.message);
     } else {
-      showAlert('✅ Check your email to confirm your account, then sign in.', 'success');
+      showAlert('Check your email to confirm your account, then sign in.', 'success');
     }
   });
 
@@ -412,7 +418,7 @@ function clearAlert() {
 
 function openForgotModal() {
   showModal({
-    title: '🔒 Reset Password',
+    title: 'Reset Password',
     body: `
       <p class="text-muted mb-2">Enter your email and we'll send a reset link.</p>
       <div class="form-group">
@@ -441,7 +447,7 @@ function openForgotModal() {
               alertEl.textContent = error.message;
             } else {
               alertEl.style.cssText = 'display:block;background:#ebfbee;color:#2f9e44;border:1px solid #b2f2bb;border-radius:7px;padding:0.6rem 0.8rem;font-size:0.85rem';
-              alertEl.textContent = '✅ Reset link sent! Check your inbox.';
+              alertEl.textContent = 'Reset link sent. Check your inbox.';
             }
           }
         },
@@ -459,7 +465,7 @@ async function renderSetPasswordPage() {
     <div class="auth-page">
       <div class="auth-card">
         <div class="auth-logo">
-          <h1>🔐 ${esc(APP.name)}</h1>
+          <h1><i class="fa-solid fa-lock"></i> ${esc(APP.name)}</h1>
           <p>Set your new password to continue</p>
         </div>
         <div id="sp-alert" class="auth-error" role="alert"></div>
@@ -537,10 +543,10 @@ async function signOut() {
 function headerHTML(activePath) {
   const isAdmin = state.profile?.role === 'admin';
   const links = [
-    { path: '/dashboard', label: '📊 Dashboard' },
-    { path: '/quiz',      label: '📝 Take Quiz'  },
-    { path: '/history',   label: '📖 History'    },
-    ...(isAdmin ? [{ path: '/admin', label: '⚙️ Admin' }] : []),
+    { path: '/dashboard', label: '<i class="fa-solid fa-gauge-high"></i> Dashboard' },
+    { path: '/quiz',      label: '<i class="fa-solid fa-list-check"></i> Take Quiz'  },
+    { path: '/history',   label: '<i class="fa-solid fa-clock-rotate-left"></i> History' },
+    ...(isAdmin ? [{ path: '/admin', label: '<i class="fa-solid fa-gear"></i> Admin' }] : []),
   ];
 
   const navItems = links.map(l =>
@@ -555,10 +561,12 @@ function headerHTML(activePath) {
 
   return `
     <header class="app-header">
-      <div class="app-logo">📚 ${esc(APP.name)}</div>
+      <div class="app-logo"><i class="fa-solid fa-book-open"></i> ${esc(APP.name)}</div>
       <nav class="app-nav" aria-label="Main navigation">
         ${navItems}
-        <button class="nav-btn danger-nav" onclick="_confirmSignOut()">🚪 Sign Out</button>
+        <button class="nav-btn danger-nav" onclick="_confirmSignOut()">
+          <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+        </button>
       </nav>
       <button class="hamburger" id="hamburger-btn" aria-label="Open menu" onclick="_toggleMobileMenu()">
         <span></span><span></span><span></span>
@@ -566,7 +574,9 @@ function headerHTML(activePath) {
     </header>
     <div class="mobile-menu" id="mobile-menu" role="navigation" aria-label="Mobile navigation">
       ${mobileItems}
-      <button class="nav-btn danger-nav" onclick="_confirmSignOut()">🚪 Sign Out</button>
+      <button class="nav-btn danger-nav" onclick="_confirmSignOut()">
+        <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+      </button>
     </div>`;
 }
 
@@ -575,7 +585,7 @@ window.navigate          = navigate;
 window._toggleMobileMenu = () => document.getElementById('mobile-menu')?.classList.toggle('open');
 window._closeMobileMenu  = () => document.getElementById('mobile-menu')?.classList.remove('open');
 window._confirmSignOut   = () => showModal({
-  title: '👋 Sign Out',
+  title: 'Sign Out',
   body:  '<p>Are you sure you want to sign out?</p>',
   actions: [
     { id: 'cancel',  label: 'Cancel',   cls: 'btn-outline', handler: (_, c) => c() },
@@ -593,10 +603,10 @@ async function renderDashboard() {
   document.getElementById('root').innerHTML = headerHTML('/dashboard') + `
     <div class="page">
       <div class="page-header">
-        <h2 class="page-title">👋 Welcome, ${esc(displayName)}!</h2>
+        <h2 class="page-title"><i class="fa-solid fa-user"></i> Welcome, ${esc(displayName)}!</h2>
         <button class="btn btn-primary" onclick="navigate('/quiz')">
           <span class="btn-spinner"></span>
-          <span class="btn-text">🚀 New Quiz</span>
+          <span class="btn-text"><i class="fa-solid fa-rocket"></i> New Quiz</span>
         </button>
       </div>
       <div id="dash-content">
@@ -629,17 +639,17 @@ async function loadDashboardStats() {
 
   el.innerHTML = `
     <div class="stats-grid">
-      ${statCard('🏆', total,       'Quizzes Completed')}
-      ${statCard('📊', avgPct + '%', 'Average Score')}
-      ${statCard('⭐', bestPct + '%','Best Score')}
-      ${statCard('✏️', answered,    'Questions Answered')}
-      ${statCard('⏸️', paused.length,'Paused Quizzes')}
+      ${statCard('trophy', total,        'Quizzes Completed')}
+      ${statCard('chart-line', avgPct + '%', 'Average Score')}
+      ${statCard('star', bestPct + '%',  'Best Score')}
+      ${statCard('pen', answered,        'Questions Answered')}
+      ${statCard('pause', paused.length, 'Paused Quizzes')}
     </div>
 
     ${paused.length ? `
       <div class="card mb-2">
         <div class="card-header">
-          <div class="card-title">⏸️ Paused Quizzes</div>
+          <div class="card-title"><i class="fa-solid fa-pause"></i> Paused Quizzes</div>
           <button class="btn btn-ghost btn-sm" onclick="navigate('/history')">View all →</button>
         </div>
         <div class="history-list">${paused.slice(0, 3).map(historyItemHTML).join('')}</div>
@@ -648,16 +658,18 @@ async function loadDashboardStats() {
     ${completed.length ? `
       <div class="card">
         <div class="card-header">
-          <div class="card-title">📖 Recent Completed</div>
+          <div class="card-title"><i class="fa-solid fa-circle-check"></i> Recent Completed</div>
           <button class="btn btn-ghost btn-sm" onclick="navigate('/history')">View all →</button>
         </div>
         <div class="history-list">${completed.slice(0, 5).map(historyItemHTML).join('')}</div>
       </div>` : `
       <div class="empty-state">
-        <div class="empty-state-icon">📝</div>
+        <div class="empty-state-icon"><i class="fa-solid fa-clipboard-list"></i></div>
         <div class="empty-state-title">No quizzes yet!</div>
         <p class="text-muted mb-2">Start your first quiz to see stats here.</p>
-        <button class="btn btn-primary btn-lg" onclick="navigate('/quiz')">Take Your First Quiz</button>
+        <button class="btn btn-primary btn-lg" onclick="navigate('/quiz')">
+          <i class="fa-solid fa-rocket"></i> Take Your First Quiz
+        </button>
       </div>`}`;
 
   bindHistoryItemActions(el, loadDashboardStats);
@@ -666,7 +678,7 @@ async function loadDashboardStats() {
 function pct(s) { return s.total_questions ? Math.round(s.score / s.total_questions * 100) : 0; }
 function statCard(icon, value, label) {
   return `<div class="stat-card">
-    <div class="stat-icon">${icon}</div>
+    <div class="stat-icon"><i class="fa-solid fa-${icon}"></i></div>
     <div class="stat-value">${esc(String(value))}</div>
     <div class="stat-label">${esc(label)}</div>
   </div>`;
@@ -691,12 +703,12 @@ async function renderQuizPage() {
   document.getElementById('root').innerHTML = headerHTML('/quiz') + `
     <div class="page">
       <div class="page-header">
-        <h2 class="page-title">📝 Take a Quiz</h2>
+        <h2 class="page-title"><i class="fa-solid fa-list-check"></i> Take a Quiz</h2>
       </div>
 
       ${paused?.length ? `
         <div class="card mb-2" style="border-color:var(--warning);border-width:2px">
-          <div class="card-title mb-1">⏸️ Resume a Paused Quiz</div>
+          <div class="card-title mb-1"><i class="fa-solid fa-pause"></i> Resume a Paused Quiz</div>
           <div class="history-list">${paused.map(historyItemHTML).join('')}</div>
         </div>` : ''}
 
@@ -738,7 +750,7 @@ async function renderQuizPage() {
           </div>
           <button type="submit" class="btn btn-primary btn-full btn-lg" id="start-quiz-btn">
             <span class="btn-spinner"></span>
-            <span class="btn-text">🚀 Start Quiz</span>
+            <span class="btn-text"><i class="fa-solid fa-rocket"></i> Start Quiz</span>
           </button>
         </form>
       </div>
@@ -855,7 +867,7 @@ function renderActiveQuiz() {
       updateTimerDisplay();
       if (state.quiz.timeRemaining <= 0) {
         clearInterval(state.quizTimer);
-        toast('⏰ Time is up! Submitting your quiz…', 'warning');
+        toast('Time is up. Submitting your quiz...', 'warning');
         await submitQuiz(true);
       }
     }, 1000);
@@ -873,7 +885,7 @@ function renderQuestionUI() {
   const options = Object.entries(question.options || {});
 
   const timerHTML = q.timeLimit > 0
-    ? `<div class="timer" id="quiz-timer" aria-live="polite" aria-label="Time remaining">⏱ ${formatTime(q.timeRemaining)}</div>`
+    ? `<div class="timer" id="quiz-timer" aria-live="polite" aria-label="Time remaining"><i class="fa-solid fa-clock"></i> ${formatTime(q.timeRemaining)}</div>`
     : `<div></div>`;
 
   document.getElementById('quiz-wrapper').innerHTML = `
@@ -882,7 +894,7 @@ function renderQuestionUI() {
       ${timerHTML}
       <div style="display:flex;gap:0.5rem;flex-shrink:0">
         <button class="btn btn-outline btn-sm" id="pause-btn">
-          <span class="btn-spinner"></span><span class="btn-text">⏸️ Pause</span>
+          <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-pause"></i> Pause</span>
         </button>
         <button class="btn btn-danger btn-sm" id="submit-early-btn">
           <span class="btn-spinner"></span><span class="btn-text">Submit</span>
@@ -911,7 +923,7 @@ function renderQuestionUI() {
       <span class="text-muted" style="font-size:0.875rem">${idx + 1} / ${total}</span>
       ${idx < total - 1
         ? `<button class="btn btn-primary" id="next-btn">Next →</button>`
-        : `<button class="btn btn-success" id="next-btn">Review &amp; Submit ✓</button>`}
+        : `<button class="btn btn-success" id="next-btn"><i class="fa-solid fa-check"></i> Review &amp; Submit</button>`}
     </div>`;
 
   // Render KaTeX
@@ -955,7 +967,7 @@ function updateTimerDisplay() {
   const el = document.getElementById('quiz-timer');
   if (!el || !state.quiz) return;
   const t = state.quiz.timeRemaining;
-  el.textContent = `⏱ ${formatTime(t)}`;
+  el.innerHTML = `<i class="fa-solid fa-clock"></i> ${formatTime(t)}`;
   el.className = 'timer';
   if (t > 0 && t <= 60)  el.classList.add('danger');
   else if (t <= 300)     el.classList.add('warn');
@@ -965,12 +977,12 @@ function openReviewModal() {
   const q         = state.quiz;
   const unanswered= q.questions.filter(x => !q.answers[x.id]).length;
   showModal({
-    title: '📋 Review & Submit',
+    title: 'Review and Submit',
     body: `
       <p>Answered <strong>${Object.keys(q.answers).length}</strong> of <strong>${q.questions.length}</strong> questions.</p>
       ${unanswered > 0
-        ? `<p class="text-danger mt-1">⚠️ ${unanswered} question${unanswered > 1 ? 's' : ''} unanswered.</p>`
-        : `<p class="text-success mt-1">✅ All questions answered!</p>`}`,
+        ? `<p class="text-danger mt-1"><i class="fa-solid fa-triangle-exclamation"></i> ${unanswered} question${unanswered > 1 ? 's' : ''} unanswered.</p>`
+        : `<p class="text-success mt-1"><i class="fa-solid fa-circle-check"></i> All questions answered.</p>`}`,
     actions: [
       { id: 'back',   label: 'Go Back',     cls: 'btn-outline', handler: (_, c) => c() },
       { id: 'submit', label: 'Submit Quiz', cls: 'btn-primary', handler: async (btn, c) => {
@@ -982,7 +994,7 @@ function openReviewModal() {
 
 function openSubmitConfirmModal() {
   showModal({
-    title: '⚠️ Submit Quiz?',
+    title: 'Submit Quiz?',
     body:  '<p>Are you sure? This cannot be undone.</p>',
     actions: [
       { id: 'cancel', label: 'Cancel',     cls: 'btn-outline', handler: (_, c) => c() },
@@ -1032,15 +1044,15 @@ async function submitQuiz(timeExpired = false) {
   if (error) { toast('Failed to save results: ' + error.message, 'error'); return; }
 
   const percentage = Math.round((score / q.questions.length) * 100);
-  const { grade, emoji } = getGrade(percentage);
+  const { grade, icon } = getGrade(percentage);
   const savedQuestions = q.questions;
   const savedAnswers   = q.answers;
   state.quiz = null;
 
-  renderQuizResults(score, savedQuestions.length, percentage, grade, emoji, savedQuestions, savedAnswers, timeExpired);
+  renderQuizResults(score, savedQuestions.length, percentage, grade, icon, savedQuestions, savedAnswers, timeExpired);
 }
 
-function renderQuizResults(score, total, percentage, grade, emoji, questions, answers, timeExpired) {
+function renderQuizResults(score, total, percentage, grade, icon, questions, answers, timeExpired) {
   // Ensure quiz wrapper exists
   if (!document.getElementById('quiz-wrapper')) {
     document.getElementById('root').innerHTML = headerHTML('/quiz') + `
@@ -1053,18 +1065,22 @@ function renderQuizResults(score, total, percentage, grade, emoji, questions, an
         <div class="score-pct">${percentage}%</div>
         <div class="score-fraction">${score}/${total}</div>
       </div>
-      <div class="result-grade">${emoji} Grade: ${grade}</div>
+      <div class="result-grade"><i class="fa-solid fa-${icon}"></i> Grade: ${grade}</div>
       <p class="text-muted mb-3">
-        ${timeExpired ? '⏰ Time expired — ' : ''}
+        ${timeExpired ? '<i class="fa-solid fa-clock"></i> Time expired - ' : ''}
         You answered <strong>${score}</strong> of <strong>${total}</strong> questions correctly.
       </p>
       <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap" class="mb-3">
-        <button class="btn btn-primary btn-lg" onclick="navigate('/quiz')">🚀 New Quiz</button>
-        <button class="btn btn-outline btn-lg" onclick="navigate('/dashboard')">📊 Dashboard</button>
+        <button class="btn btn-primary btn-lg" onclick="navigate('/quiz')">
+          <i class="fa-solid fa-rocket"></i> New Quiz
+        </button>
+        <button class="btn btn-outline btn-lg" onclick="navigate('/dashboard')">
+          <i class="fa-solid fa-gauge-high"></i> Dashboard
+        </button>
       </div>
       <hr class="divider" />
       <div style="text-align:left">
-        <div class="card-title mb-2">📖 Answer Review</div>
+        <div class="card-title mb-2"><i class="fa-solid fa-list-check"></i> Answer Review</div>
         ${questions.map((q, i) => {
           const ua        = answers[q.id];
           const isCorrect = ua === q.correct_answer;
@@ -1087,9 +1103,11 @@ function renderQuizResults(score, total, percentage, grade, emoji, questions, an
                 }).join('')}
               </div>
               <p style="font-size:0.83rem;margin-top:0.4rem;${isCorrect ? 'color:var(--success)' : 'color:var(--danger)'}">
-                ${isCorrect ? '✅ Correct!' : `❌ You chose: ${esc(ua || '(none)')} — Correct: ${esc(q.correct_answer)}`}
+                ${isCorrect
+                  ? '<i class="fa-solid fa-circle-check"></i> Correct.'
+                  : `<i class="fa-solid fa-circle-xmark"></i> You chose: ${esc(ua || '(none)')} — Correct: ${esc(q.correct_answer)}`}
               </p>
-              ${q.explanation ? `<p style="font-size:0.83rem;color:var(--text-muted);font-style:italic;margin-top:0.2rem">💡 ${esc(q.explanation)}</p>` : ''}
+              ${q.explanation ? `<p style="font-size:0.83rem;color:var(--text-muted);font-style:italic;margin-top:0.2rem"><i class="fa-solid fa-lightbulb"></i> ${esc(q.explanation)}</p>` : ''}
             </div>`;
         }).join('')}
       </div>
@@ -1114,9 +1132,9 @@ async function renderHistoryPage() {
   document.getElementById('root').innerHTML = headerHTML('/history') + `
     <div class="page">
       <div class="page-header">
-        <h2 class="page-title">📖 Quiz History</h2>
+        <h2 class="page-title"><i class="fa-solid fa-clock-rotate-left"></i> Quiz History</h2>
         <button class="btn btn-danger btn-sm" id="clear-all-btn">
-          <span class="btn-spinner"></span><span class="btn-text">🗑️ Clear All</span>
+          <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-trash"></i> Clear All</span>
         </button>
       </div>
       <div class="tab-bar" role="tablist">
@@ -1146,7 +1164,7 @@ async function renderHistoryPage() {
     if (!data?.length) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">📝</div>
+          <div class="empty-state-icon"><i class="fa-solid fa-clipboard-list"></i></div>
           <div class="empty-state-title">No history found</div>
           <p class="text-muted">Start a quiz to see history here.</p>
         </div>`;
@@ -1170,7 +1188,7 @@ async function renderHistoryPage() {
   // Clear all
   document.getElementById('clear-all-btn')?.addEventListener('click', () => {
     showModal({
-      title: '⚠️ Clear All History',
+      title: 'Clear All History',
       body:  '<p>This will permanently delete all your quiz history. This action cannot be undone.</p>',
       actions: [
         { id: 'cancel',  label: 'Cancel',    cls: 'btn-outline', handler: (_, c) => c() },
@@ -1197,7 +1215,9 @@ function historyItemHTML(session) {
   return `
     <div class="history-item">
       <span class="history-badge ${isPaused ? 'badge-paused' : 'badge-completed'}">
-        ${isPaused ? '⏸️ Paused' : '✅ Done'}
+        ${isPaused
+          ? '<i class="fa-solid fa-pause"></i> Paused'
+          : '<i class="fa-solid fa-circle-check"></i> Done'}
       </span>
       <div class="history-info">
         <div class="history-title">${esc(session.category || 'General')} &bull; ${session.total_questions} Qs</div>
@@ -1209,11 +1229,11 @@ function historyItemHTML(session) {
       <div class="history-actions">
         ${isPaused ? `
           <button class="btn btn-primary btn-sm" data-resume="${esc(session.id)}" type="button">
-            <span class="btn-spinner"></span><span class="btn-text">▶ Resume</span>
+            <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-play"></i> Resume</span>
           </button>` : ''}
         <button class="btn btn-outline btn-sm" data-delete="${esc(session.id)}" type="button"
                 style="color:var(--danger);border-color:var(--danger)" aria-label="Delete session">
-          <span class="btn-spinner"></span><span class="btn-text">🗑️</span>
+          <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-trash"></i></span>
         </button>
       </div>
     </div>`;
@@ -1231,7 +1251,7 @@ function bindHistoryItemActions(container, onUpdate) {
 
 function deleteSession(id, callback) {
   showModal({
-    title: '🗑️ Delete Quiz',
+    title: 'Delete Quiz',
     body:  '<p>Delete this quiz session permanently? This cannot be undone.</p>',
     actions: [
       { id: 'cancel',  label: 'Cancel', cls: 'btn-outline', handler: (_, c) => c() },
@@ -1255,7 +1275,7 @@ async function renderAdminPage() {
 
   document.getElementById('root').innerHTML = headerHTML('/admin') + `
     <div class="page">
-      <div class="page-header"><h2 class="page-title">⚙️ Admin Panel</h2></div>
+      <div class="page-header"><h2 class="page-title"><i class="fa-solid fa-gear"></i> Admin Panel</h2></div>
       <div class="tab-bar" role="tablist">
         <button class="tab-item active" data-tab="questions" role="tab">Questions</button>
         <button class="tab-item"        data-tab="users"     role="tab">Users</button>
@@ -1312,7 +1332,7 @@ async function loadQuestions() {
   if (!data?.length) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">❓</div>
+        <div class="empty-state-icon"><i class="fa-solid fa-circle-question"></i></div>
         <div class="empty-state-title">No questions yet</div>
         <p class="text-muted">Click "Add Question" to get started.</p>
       </div>`;
@@ -1327,9 +1347,13 @@ async function loadQuestions() {
           <span style="font-size:0.72rem;color:var(--text-muted);padding:0.18rem 0.5rem;background:var(--bg);border-radius:4px;white-space:nowrap">
             ${esc(q.category || 'General')}
           </span>
-          <button class="btn btn-outline btn-sm" data-edit="${esc(q.id)}" type="button" aria-label="Edit question">✏️</button>
+          <button class="btn btn-outline btn-sm" data-edit="${esc(q.id)}" type="button" aria-label="Edit question">
+            <i class="fa-solid fa-pen"></i>
+          </button>
           <button class="btn btn-outline btn-sm" data-del="${esc(q.id)}"  type="button"
-                  style="color:var(--danger);border-color:var(--danger)" aria-label="Delete question">🗑️</button>
+                  style="color:var(--danger);border-color:var(--danger)" aria-label="Delete question">
+            <i class="fa-solid fa-trash"></i>
+          </button>
         </div>
       </div>
     </div>`).join('');
@@ -1352,7 +1376,7 @@ async function loadQuestions() {
   container.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', () => {
       showModal({
-        title: '🗑️ Delete Question',
+        title: 'Delete Question',
         body:  '<p>Permanently delete this question?</p>',
         actions: [
           { id: 'cancel',  label: 'Cancel', cls: 'btn-outline', handler: (_, c) => c() },
@@ -1374,7 +1398,7 @@ function showQuestionModal(existing) {
   const opts   = existing?.options || { A: '', B: '', C: '', D: '' };
 
   showModal({
-    title: isEdit ? '✏️ Edit Question' : '➕ Add Question',
+    title: isEdit ? 'Edit Question' : 'Add Question',
     body: `
       <div class="form-group">
         <label class="form-label">Question Text <small style="font-weight:400;text-transform:none">(LaTeX: $…$  or  $$…$$)</small></label>
@@ -1517,7 +1541,7 @@ function renderInviteTab(container) {
       <div class="admin-section-title">Invite a New Student</div>
       <div class="card" style="max-width:500px">
         <div class="info-box mb-2">
-          📧 Invited students receive an email with a link that directs them to set their password
+          <i class="fa-solid fa-envelope"></i> Invited students receive an email with a link that directs them to set their password
           before accessing the dashboard. Invitations are sent via the <code>/.netlify/functions/invite-user</code>
           serverless function — ensure <code>SUPABASE_SERVICE_ROLE_KEY</code> is set in your Netlify environment.
         </div>
@@ -1531,7 +1555,7 @@ function renderInviteTab(container) {
         </div>
         <div id="inv-alert" style="display:none;border-radius:8px;padding:0.7rem 0.85rem;font-size:0.85rem;margin-bottom:1rem"></div>
         <button class="btn btn-primary" id="send-invite-btn" type="button">
-          <span class="btn-spinner"></span><span class="btn-text">📧 Send Invitation</span>
+          <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-paper-plane"></i> Send Invitation</span>
         </button>
       </div>
     </div>`;
@@ -1558,12 +1582,12 @@ function renderInviteTab(container) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Invite failed');
       alertEl.style.cssText = 'display:block;background:#ebfbee;color:#2f9e44;border:1px solid #b2f2bb;border-radius:8px;padding:0.7rem 0.85rem;font-size:0.85rem;margin-bottom:1rem';
-      alertEl.textContent   = `✅ Invitation sent to ${email}!`;
+      alertEl.textContent   = `Invitation sent to ${email}.`;
       document.getElementById('inv-email').value = '';
       document.getElementById('inv-name').value  = '';
     } catch (err) {
       alertEl.style.cssText = 'display:block;background:#fff5f5;color:var(--danger);border:1px solid #ffc9c9;border-radius:8px;padding:0.7rem 0.85rem;font-size:0.85rem;margin-bottom:1rem';
-      alertEl.textContent   = '❌ ' + err.message;
+      alertEl.textContent   = err.message;
     }
     btnLoading(btn, false);
   });
