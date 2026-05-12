@@ -443,11 +443,14 @@ async function renderLoginPage() {
     btnLoading(btn, true);
     const { error } = await sb.auth.signUp({
       email, password: pass,
-      options: { data: { full_name: name } },
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: new URL('/index.html', location.origin).href,
+      },
     });
     btnLoading(btn, false);
     if (error) {
-      showAlert(error.message);
+      showAlert(formatSignupError(error));
     } else {
       showAlert('Check your email to confirm your account, then sign in.', 'success');
     }
@@ -469,6 +472,13 @@ function showAlert(msg, type = 'error') {
 function clearAlert() {
   const el = document.getElementById('auth-alert');
   if (el) { el.classList.remove('show'); el.textContent = ''; el.style.cssText = ''; }
+}
+function formatSignupError(error) {
+  if (!error) return 'Signup failed. Please try again.';
+  if (error.status === 500) {
+    return 'Signup failed due to a server error. Check Supabase Auth settings (Site URL, Redirect URLs, SMTP) and try again.';
+  }
+  return error.message || 'Signup failed. Please try again.';
 }
 
 function openForgotModal() {
