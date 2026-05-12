@@ -1690,7 +1690,9 @@ async function initializeAppWithConfig() {
     APP.supabaseUrl = config.supabaseUrl;
     APP.supabaseKey = config.supabaseAnonKey;
     APP.defaultQuizTime = config.defaultQuizTime || APP.defaultQuizTime;
-    sb = window.supabase.createClient(APP.supabaseUrl, APP.supabaseKey);
+    sb = window.supabase.createClient(APP.supabaseUrl, APP.supabaseKey, {
+      global: { headers: { apikey: APP.supabaseKey } },
+    });
   } catch (err) {
     renderConfigError(err.message);
     return;
