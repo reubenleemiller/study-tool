@@ -30,14 +30,14 @@ A **production-ready, static HTML/CSS/JS** study tool for multiple-choice questi
 
 ### 2. Configure the App
 
-Edit `config.js` and replace the placeholder values:
+`config.js` ships with placeholders. Replace them with your project values before deploying:
 
 ```js
 window.SUPABASE_URL      = 'https://your-project-ref.supabase.co';
 window.SUPABASE_ANON_KEY = 'your-anon-key-here';
 ```
 
-> ⚠️ **Never commit real keys** to a public repository. For production use, consider a `.env`-based approach or Netlify's environment variable injection.
+> ⚠️ **Never commit real keys** to a public repository. If the placeholders are left in place, the app will show a configuration-required message. For production use, consider a build step or environment-variable injection so secrets never live in source control.
 
 ### 3. Deploy to Netlify
 
@@ -71,7 +71,7 @@ After deploying:
 ├── index.html                      # SPA shell
 ├── style.css                       # All styles
 ├── main.js                         # All app logic (router, auth, quiz, admin …)
-├── config.js                       # Supabase keys (edit this)
+├── config.js                       # Supabase config (fill in before deploy)
 ├── netlify.toml                    # Netlify config
 ├── supabase-schema.sql             # Database schema + RLS policies
 └── netlify/

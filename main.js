@@ -10,6 +10,31 @@
 // SECTION 1: App Config & Global State
 // ============================================================
 
+const configErrors = Array.isArray(window.STUDYTOOL_CONFIG_ERRORS)
+  ? window.STUDYTOOL_CONFIG_ERRORS
+  : [];
+
+if (window.STUDYTOOL_CONFIG_VALID !== true) {
+  const root = document.getElementById('root');
+  const preloader = document.getElementById('preloader');
+  const errorList = configErrors.length
+    ? `<ul style="text-align:left;max-width:420px;margin:0.75rem auto 0;padding-left:1.2rem;">${configErrors.map((err) => `<li>${err}</li>`).join('')}</ul>`
+    : '';
+
+  if (root) {
+    root.innerHTML =
+      '<div class="empty-state">' +
+      '<div class="empty-state-icon">⚙️</div>' +
+      '<div class="empty-state-title">App configuration required</div>' +
+      '<p style="max-width:420px;margin:0 auto;color:var(--text-muted)">Update <code>config.js</code> with your Supabase URL and anon key, then reload.</p>' +
+      errorList +
+      '</div>';
+  }
+
+  if (preloader) preloader.classList.add('hidden');
+  throw new Error('Missing Supabase configuration.');
+}
+
 const APP = {
   name:             window.APP_NAME         || 'StudyTool',
   supabaseUrl:      window.SUPABASE_URL,
