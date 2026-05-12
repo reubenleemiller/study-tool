@@ -41,8 +41,11 @@
   <!-- Supabase JS (UMD – exposes window.supabase) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
-  <!-- App config (edit this file with your Supabase keys) -->
+  <!-- App settings (non-secret) -->
   <script src="config.js"></script>
+
+  <!-- Runtime config loader (Netlify Functions) -->
+  <script src="config-loader.js"></script>
 
   <!-- Main application -->
   <script src="main.js"></script>
