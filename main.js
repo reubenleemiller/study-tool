@@ -10,15 +10,15 @@
 // SECTION 1: App Config & Global State
 // ============================================================
 
-const APP = {
+let APP = {
   name:             window.APP_NAME         || 'StudyTool',
-  supabaseUrl:      window.SUPABASE_URL,
-  supabaseKey:      window.SUPABASE_ANON_KEY,
+  supabaseUrl:      '',
+  supabaseKey:      '',
   defaultQuizTime:  window.DEFAULT_QUIZ_TIME || 1800,
 };
 
 // Supabase client (UMD global exposed by the CDN script)
-const sb = window.supabase.createClient(APP.supabaseUrl, APP.supabaseKey);
+let sb = null;
 
 // Mutable application state
 const state = {
@@ -65,6 +65,23 @@ function esc(v) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function renderConfigError(message) {
+  const root = document.getElementById('root');
+  const preloader = document.getElementById('preloader');
+  const msg = message || 'App configuration missing. Check Netlify environment variables.';
+
+  if (root) {
+    root.innerHTML =
+      '<div class="empty-state">' +
+      '<div class="empty-state-icon">⚙️</div>' +
+      '<div class="empty-state-title">App configuration required</div>' +
+      '<p style="max-width:420px;margin:0 auto;color:var(--text-muted)">' + esc(msg) + '</p>' +
+      '</div>';
+  }
+
+  if (preloader) preloader.classList.add('hidden');
 }
 
 /** Shuffle array (Fisher-Yates) */
@@ -1556,7 +1573,22 @@ function renderInviteTab(container) {
 // SECTION 12: App Bootstrap
 // ============================================================
 
-async function init() {
+async function initializeAppWithConfig() {
+  try {
+    if (typeof window.loadStudyToolConfig !== 'function') {
+      throw new Error('Config loader missing. Ensure config-loader.js is included.');
+    }
+    const config = await window.loadStudyToolConfig();
+    APP.name = config.appName || APP.name;
+    APP.supabaseUrl = config.supabaseUrl;
+    APP.supabaseKey = config.supabaseAnonKey;
+    APP.defaultQuizTime = config.defaultQuizTime || APP.defaultQuizTime;
+    sb = window.supabase.createClient(APP.supabaseUrl, APP.supabaseKey);
+  } catch (err) {
+    renderConfigError(err.message);
+    return;
+  }
+
   // Restore auth session from storage
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
@@ -1593,7 +1625,7 @@ async function init() {
 }
 
 // Kick off
-init().catch(err => {
+initializeAppWithConfig().catch(err => {
   console.error('StudyTool init error:', err);
   hidePreloader();
 });

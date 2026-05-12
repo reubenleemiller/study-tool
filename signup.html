@@ -129,13 +129,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
+  <script src="config-loader.js"></script>
   <script>
-    /* ── Init ── */
-    var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-    if (window.APP_NAME) {
-      document.getElementById('app-title').innerHTML =
-        '<i class="fa-solid fa-book-open"></i> ' + window.APP_NAME;
-    }
+    var sb = null;
 
     /* ── Helpers ── */
     function hidePreloader() {
@@ -165,147 +161,173 @@
     function isValidEmail(v) {
       return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
     }
-
-    /* ── Redirect if already logged in ── */
-    sb.auth.getSession().then(function(ref) {
-      if (ref.data.session) window.location.replace('index.html');
-      else hidePreloader();
-    });
-
-    /* ── Live email validation checkmark ── */
-    var emailInput = document.getElementById('email');
-    var emailIcon  = document.getElementById('email-valid-icon');
-    emailInput.addEventListener('input', function() {
-      emailIcon.classList.toggle('show', isValidEmail(emailInput.value.trim()));
-    });
-
-    /* ── Live name validation checkmark ── */
-    var nameInput = document.getElementById('full-name');
-    var nameIcon  = document.getElementById('name-valid-icon');
-    nameInput.addEventListener('input', function() {
-      nameIcon.classList.toggle('show', nameInput.value.trim().length >= 2);
-    });
-
-    /* ── Password policy checker ── */
-    var CRITERIA = [
-      { id: 'p-len',     test: function(v) { return v.length >= 8; } },
-      { id: 'p-upper',   test: function(v) { return /[A-Z]/.test(v); } },
-      { id: 'p-lower',   test: function(v) { return /[a-z]/.test(v); } },
-      { id: 'p-digit',   test: function(v) { return /[0-9]/.test(v); } },
-      { id: 'p-special', test: function(v) { return /[^A-Za-z0-9]/.test(v); } },
-    ];
-
-    function setMetIcon(li, met) {
-      var icon = li.querySelector('.pi');
-      if (!icon) return;
-      /* swap FA class */
-      icon.className = met
-        ? 'fa-solid fa-circle-check pi'
-        : 'fa-regular fa-circle pi';
+    function showConfigError(message) {
+      showAlert(message || 'App configuration missing. Check Netlify environment variables.');
+      var preloader = document.getElementById('preloader');
+      if (preloader) preloader.classList.add('hidden');
+      var buttons = document.querySelectorAll('button[type="submit"]');
+      buttons.forEach(function(btn) { btn.disabled = true; });
     }
 
-    var pwdInput = document.getElementById('password');
-    pwdInput.addEventListener('input', function() {
-      var v = pwdInput.value;
-      CRITERIA.forEach(function(c) {
-        var li  = document.getElementById(c.id);
-        var met = c.test(v);
-        if (!li) return;
-        li.classList.toggle('met', met);
-        setMetIcon(li, met);
-      });
-      /* also re-check confirm match */
-      checkConfirm();
-    });
-
-    /* ── Confirm-password match indicator ── */
-    var confirmInput = document.getElementById('confirm-password');
-    var confirmIcon  = document.getElementById('confirm-valid-icon');
-    var matchHint    = document.getElementById('match-hint');
-    var matchIcon    = document.getElementById('match-icon');
-    var matchText    = document.getElementById('match-text');
-    var confirmTouched = false;
-
-    function checkConfirm() {
-      if (!confirmTouched) return;
-      var pw  = pwdInput.value;
-      var cfw = confirmInput.value;
-      if (!cfw) {
-        matchHint.classList.remove('show', 'ok', 'bad');
-        confirmIcon.classList.remove('show');
-        return;
-      }
-      var ok = (pw === cfw);
-      matchHint.className = 'pwd-match-hint show ' + (ok ? 'ok' : 'bad');
-      matchIcon.className  = ok
-        ? 'fa-solid fa-circle-check'
-        : 'fa-solid fa-circle-xmark';
-      matchText.textContent = ok ? 'Passwords match' : 'Passwords do not match';
-      confirmIcon.classList.toggle('show', ok);
-    }
-
-    confirmInput.addEventListener('input', function() {
-      confirmTouched = true;
-      checkConfirm();
-    });
-    confirmInput.addEventListener('blur', function() {
-      confirmTouched = true;
-      checkConfirm();
-    });
-
-    /* ── Register form ── */
-    document.getElementById('register-form').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      clearAlert();
-
-      var btn     = document.getElementById('register-btn');
-      var name    = nameInput.value.trim();
-      var email   = emailInput.value.trim();
-      var pass    = pwdInput.value;
-      var confirm = confirmInput.value;
-
-      /* Validation */
-      if (!name)            { showAlert('Please enter your full name.');                  return; }
-      if (!isValidEmail(email)) { showAlert('Please enter a valid email address.');       return; }
-      if (pass !== confirm) { showAlert('Passwords do not match. Please try again.');     return; }
-
-      var unmet = CRITERIA.filter(function(c) { return !c.test(pass); });
-      if (unmet.length > 0) {
-        showAlert('Your password does not meet all the requirements listed below.');
+    async function initializeAppWithConfig() {
+      try {
+        if (typeof window.loadStudyToolConfig !== 'function') {
+          throw new Error('Config loader missing. Ensure config-loader.js is included.');
+        }
+        var config = await window.loadStudyToolConfig();
+        sb = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+        if (config.appName) {
+          document.getElementById('app-title').innerHTML =
+            '<i class="fa-solid fa-book-open"></i> ' + config.appName;
+        }
+      } catch (err) {
+        showConfigError(err.message);
         return;
       }
 
-      btnLoading(btn, true);
-      var ref = await sb.auth.signUp({
-        email: email,
-        password: pass,
-        options: { data: { full_name: name } },
+      /* ── Redirect if already logged in ── */
+      sb.auth.getSession().then(function(ref) {
+        if (ref.data.session) window.location.replace('index.html');
+        else hidePreloader();
       });
-      btnLoading(btn, false);
 
-      if (ref.error) {
-        showAlert(ref.error.message);
-      } else {
-        showAlert(
-          'Account created! Check your email and click the confirmation link, then sign in.',
-          'success'
-        );
-        document.getElementById('register-form').reset();
-        /* Reset policy UI */
+      /* ── Live email validation checkmark ── */
+      var emailInput = document.getElementById('email');
+      var emailIcon  = document.getElementById('email-valid-icon');
+      emailInput.addEventListener('input', function() {
+        emailIcon.classList.toggle('show', isValidEmail(emailInput.value.trim()));
+      });
+
+      /* ── Live name validation checkmark ── */
+      var nameInput = document.getElementById('full-name');
+      var nameIcon  = document.getElementById('name-valid-icon');
+      nameInput.addEventListener('input', function() {
+        nameIcon.classList.toggle('show', nameInput.value.trim().length >= 2);
+      });
+
+      /* ── Password policy checker ── */
+      var CRITERIA = [
+        { id: 'p-len',     test: function(v) { return v.length >= 8; } },
+        { id: 'p-upper',   test: function(v) { return /[A-Z]/.test(v); } },
+        { id: 'p-lower',   test: function(v) { return /[a-z]/.test(v); } },
+        { id: 'p-digit',   test: function(v) { return /[0-9]/.test(v); } },
+        { id: 'p-special', test: function(v) { return /[^A-Za-z0-9]/.test(v); } },
+      ];
+
+      function setMetIcon(li, met) {
+        var icon = li.querySelector('.pi');
+        if (!icon) return;
+        /* swap FA class */
+        icon.className = met
+          ? 'fa-solid fa-circle-check pi'
+          : 'fa-regular fa-circle pi';
+      }
+
+      var pwdInput = document.getElementById('password');
+      pwdInput.addEventListener('input', function() {
+        var v = pwdInput.value;
         CRITERIA.forEach(function(c) {
-          var li = document.getElementById(c.id);
-          if (li) {
-            li.classList.remove('met');
-            setMetIcon(li, false);
-          }
+          var li  = document.getElementById(c.id);
+          var met = c.test(v);
+          if (!li) return;
+          li.classList.toggle('met', met);
+          setMetIcon(li, met);
         });
-        matchHint.classList.remove('show', 'ok', 'bad');
-        confirmIcon.classList.remove('show');
-        emailIcon.classList.remove('show');
-        nameIcon.classList.remove('show');
-        confirmTouched = false;
+        /* also re-check confirm match */
+        checkConfirm();
+      });
+
+      /* ── Confirm-password match indicator ── */
+      var confirmInput = document.getElementById('confirm-password');
+      var confirmIcon  = document.getElementById('confirm-valid-icon');
+      var matchHint    = document.getElementById('match-hint');
+      var matchIcon    = document.getElementById('match-icon');
+      var matchText    = document.getElementById('match-text');
+      var confirmTouched = false;
+
+      function checkConfirm() {
+        if (!confirmTouched) return;
+        var pw  = pwdInput.value;
+        var cfw = confirmInput.value;
+        if (!cfw) {
+          matchHint.classList.remove('show', 'ok', 'bad');
+          confirmIcon.classList.remove('show');
+          return;
+        }
+        var ok = (pw === cfw);
+        matchHint.className = 'pwd-match-hint show ' + (ok ? 'ok' : 'bad');
+        matchIcon.className  = ok
+          ? 'fa-solid fa-circle-check'
+          : 'fa-solid fa-circle-xmark';
+        matchText.textContent = ok ? 'Passwords match' : 'Passwords do not match';
+        confirmIcon.classList.toggle('show', ok);
       }
-    });
+
+      confirmInput.addEventListener('input', function() {
+        confirmTouched = true;
+        checkConfirm();
+      });
+      confirmInput.addEventListener('blur', function() {
+        confirmTouched = true;
+        checkConfirm();
+      });
+
+      /* ── Register form ── */
+      document.getElementById('register-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        clearAlert();
+
+        var btn     = document.getElementById('register-btn');
+        var name    = nameInput.value.trim();
+        var email   = emailInput.value.trim();
+        var pass    = pwdInput.value;
+        var confirm = confirmInput.value;
+
+        /* Validation */
+        if (!name)            { showAlert('Please enter your full name.');                  return; }
+        if (!isValidEmail(email)) { showAlert('Please enter a valid email address.');       return; }
+        if (pass !== confirm) { showAlert('Passwords do not match. Please try again.');     return; }
+
+        var unmet = CRITERIA.filter(function(c) { return !c.test(pass); });
+        if (unmet.length > 0) {
+          showAlert('Your password does not meet all the requirements listed below.');
+          return;
+        }
+
+        btnLoading(btn, true);
+        var ref = await sb.auth.signUp({
+          email: email,
+          password: pass,
+          options: { data: { full_name: name } },
+        });
+        btnLoading(btn, false);
+
+        if (ref.error) {
+          showAlert(ref.error.message);
+        } else {
+          showAlert(
+            'Account created! Check your email and click the confirmation link, then sign in.',
+            'success'
+          );
+          document.getElementById('register-form').reset();
+          /* Reset policy UI */
+          CRITERIA.forEach(function(c) {
+            var li = document.getElementById(c.id);
+            if (li) {
+              li.classList.remove('met');
+              setMetIcon(li, false);
+            }
+          });
+          matchHint.classList.remove('show', 'ok', 'bad');
+          confirmIcon.classList.remove('show');
+          emailIcon.classList.remove('show');
+          nameIcon.classList.remove('show');
+          confirmTouched = false;
+        }
+      });
+    }
+
+    initializeAppWithConfig();
   </script>
 </body>
 </html>

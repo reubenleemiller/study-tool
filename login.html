@@ -83,13 +83,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
+  <script src="config-loader.js"></script>
   <script>
-    /* ── Init ── */
-    const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-    if (window.APP_NAME) {
-      document.getElementById('app-title').innerHTML =
-        '<i class="fa-solid fa-book-open"></i> ' + window.APP_NAME;
-    }
+    var sb = null;
 
     /* ── Helpers ── */
     function hidePreloader() {
@@ -118,37 +114,64 @@
       return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
     }
 
-    /* ── Redirect if already logged in ── */
-    sb.auth.getSession().then(function(ref) {
-      var session = ref.data.session;
-      if (session) window.location.replace('index.html');
-      else hidePreloader();
-    });
+    function showConfigError(message) {
+      showAlert(message || 'App configuration missing. Check Netlify environment variables.');
+      var preloader = document.getElementById('preloader');
+      if (preloader) preloader.classList.add('hidden');
+      var buttons = document.querySelectorAll('button[type="submit"]');
+      buttons.forEach(function(btn) { btn.disabled = true; });
+    }
 
-    /* ── Live email validation checkmark ── */
-    var emailInput = document.getElementById('email');
-    var emailIcon  = document.getElementById('email-valid-icon');
-    emailInput.addEventListener('input', function() {
-      emailIcon.classList.toggle('show', isValidEmail(emailInput.value.trim()));
-    });
+    async function initializeAppWithConfig() {
+      try {
+        if (typeof window.loadStudyToolConfig !== 'function') {
+          throw new Error('Config loader missing. Ensure config-loader.js is included.');
+        }
+        var config = await window.loadStudyToolConfig();
+        sb = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+        if (config.appName) {
+          document.getElementById('app-title').innerHTML =
+            '<i class="fa-solid fa-book-open"></i> ' + config.appName;
+        }
+      } catch (err) {
+        showConfigError(err.message);
+        return;
+      }
 
-    /* ── Sign-in form ── */
-    document.getElementById('login-form').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      var btn      = document.getElementById('login-btn');
-      var email    = emailInput.value.trim();
-      var password = document.getElementById('password').value;
-      clearAlert();
-      btnLoading(btn, true);
-      var ref = await sb.auth.signInWithPassword({ email: email, password: password });
-      btnLoading(btn, false);
-      if (ref.error) showAlert('Invalid login credentials. Please check your email and password.');
-    });
+      /* ── Redirect if already logged in ── */
+      sb.auth.getSession().then(function(ref) {
+        var session = ref.data.session;
+        if (session) window.location.replace('index.html');
+        else hidePreloader();
+      });
 
-    /* ── Redirect on successful auth ── */
-    sb.auth.onAuthStateChange(function(event, session) {
-      if (event === 'SIGNED_IN' && session) window.location.replace('index.html');
-    });
+      /* ── Live email validation checkmark ── */
+      var emailInput = document.getElementById('email');
+      var emailIcon  = document.getElementById('email-valid-icon');
+      emailInput.addEventListener('input', function() {
+        emailIcon.classList.toggle('show', isValidEmail(emailInput.value.trim()));
+      });
+
+      /* ── Sign-in form ── */
+      document.getElementById('login-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        var btn      = document.getElementById('login-btn');
+        var email    = emailInput.value.trim();
+        var password = document.getElementById('password').value;
+        clearAlert();
+        btnLoading(btn, true);
+        var ref = await sb.auth.signInWithPassword({ email: email, password: password });
+        btnLoading(btn, false);
+        if (ref.error) showAlert('Invalid login credentials. Please check your email and password.');
+      });
+
+      /* ── Redirect on successful auth ── */
+      sb.auth.onAuthStateChange(function(event, session) {
+        if (event === 'SIGNED_IN' && session) window.location.replace('index.html');
+      });
+    }
+
+    initializeAppWithConfig();
   </script>
 </body>
 </html>
