@@ -1573,7 +1573,7 @@ function renderInviteTab(container) {
 // SECTION 12: App Bootstrap
 // ============================================================
 
-async function init() {
+async function initializeAppWithConfig() {
   try {
     if (typeof window.loadStudyToolConfig !== 'function') {
       throw new Error('Config loader missing. Ensure config-loader.js is included.');
@@ -1625,7 +1625,7 @@ async function init() {
 }
 
 // Kick off
-init().catch(err => {
+initializeAppWithConfig().catch(err => {
   console.error('StudyTool init error:', err);
   hidePreloader();
 });
