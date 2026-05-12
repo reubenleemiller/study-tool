@@ -1,9 +1,0 @@
-{
-  "name": "study-tool-functions",
-  "version": "1.0.0",
-  "description": "Netlify serverless functions for StudyTool",
-  "private": true,
-  "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
-  }
-}
