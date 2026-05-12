@@ -30,8 +30,8 @@
     var response;
     try {
       response = await fetch(CONFIG_ENDPOINT, {
-        cache: 'no-cache',
-        headers: { 'Cache-Control': 'no-cache' },
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-store' },
       });
     } catch (err) {
       throw new Error('Unable to reach configuration endpoint. Check your Netlify functions.');
