@@ -16,10 +16,22 @@
     }
   }
 
+  function getFirstNonEmptyString(values) {
+    for (var i = 0; i < values.length; i += 1) {
+      var value = values[i];
+      if (value === null || value === undefined) continue;
+      var trimmed = String(value).trim();
+      if (trimmed) return trimmed;
+    }
+    return '';
+  }
+
   async function loadStudyToolConfig() {
     var response;
     try {
-      response = await fetch(CONFIG_ENDPOINT);
+      var configUrl = new URL(CONFIG_ENDPOINT, window.location.origin);
+      configUrl.searchParams.set('t', Date.now().toString());
+      response = await fetch(configUrl.toString());
     } catch (err) {
       throw new Error('Unable to reach configuration endpoint. Check your Netlify functions.');
     }
@@ -33,8 +45,19 @@
       throw new Error(msg);
     }
 
-    var supabaseUrl = payload && payload.supabaseUrl ? String(payload.supabaseUrl).trim() : '';
-    var supabaseAnonKey = payload && payload.supabaseAnonKey ? String(payload.supabaseAnonKey).trim() : '';
+    if (!payload) {
+      throw new Error('Config endpoint returned invalid JSON. Ensure the Netlify function is deployed.');
+    }
+
+    var supabaseUrl = getFirstNonEmptyString([
+      payload.supabaseUrl,
+      payload.SUPABASE_URL,
+    ]);
+    var supabaseAnonKey = getFirstNonEmptyString([
+      payload.supabaseAnonKey,
+      payload.supabaseKey,
+      payload.SUPABASE_ANON_KEY,
+    ]);
 
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Server misconfiguration: missing Supabase env vars.');

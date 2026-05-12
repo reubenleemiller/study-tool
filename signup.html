@@ -183,7 +183,12 @@
         }
         var config = await window.loadStudyToolConfig();
         sb = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
-          global: { headers: { apikey: config.supabaseAnonKey } },
+          global: {
+            headers: {
+              apikey: config.supabaseAnonKey,
+              Authorization: 'Bearer ' + config.supabaseAnonKey,
+            },
+          },
         });
         if (config.appName) {
           document.getElementById('app-title').innerHTML =
