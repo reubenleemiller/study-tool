@@ -19,7 +19,9 @@
   function firstNonEmpty(values) {
     for (var i = 0; i < values.length; i += 1) {
       var value = values[i];
-      if (value) return String(value).trim();
+      if (value === null || value === undefined) continue;
+      var trimmed = String(value).trim();
+      if (trimmed) return trimmed;
     }
     return '';
   }
@@ -27,7 +29,10 @@
   async function loadStudyToolConfig() {
     var response;
     try {
-      response = await fetch(CONFIG_ENDPOINT, { cache: 'no-store' });
+      response = await fetch(CONFIG_ENDPOINT, {
+        cache: 'no-cache',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
     } catch (err) {
       throw new Error('Unable to reach configuration endpoint. Check your Netlify functions.');
     }
