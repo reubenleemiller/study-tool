@@ -6,10 +6,10 @@
 // =============================================================
 
 // Your Supabase project URL  (Project Settings → API → Project URL)
-window.SUPABASE_URL = 'https://your-project-ref.supabase.co';
+window.SUPABASE_URL = 'https://nzbjryspvnxyricfqazs.supabase.co';
 
 // Your Supabase anon/public key (Project Settings → API → anon public)
-window.SUPABASE_ANON_KEY = 'your-anon-key-here';
+window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56YmpyeXNwdm54eXJpY2ZxYXpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1NTE2ODcsImV4cCI6MjA5NDEyNzY4N30.fwVckaZqiHRcELGU9zbi85WiKPv3BEVMnuhtR_fzkvk';
 
 // Displayed in the browser tab and header
 window.APP_NAME = 'StudyTool';
