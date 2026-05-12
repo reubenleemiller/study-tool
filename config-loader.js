@@ -16,10 +16,18 @@
     }
   }
 
+  function firstNonEmpty(values) {
+    for (var i = 0; i < values.length; i += 1) {
+      var value = values[i];
+      if (value) return String(value).trim();
+    }
+    return '';
+  }
+
   async function loadStudyToolConfig() {
     var response;
     try {
-      response = await fetch(CONFIG_ENDPOINT);
+      response = await fetch(CONFIG_ENDPOINT, { cache: 'no-store' });
     } catch (err) {
       throw new Error('Unable to reach configuration endpoint. Check your Netlify functions.');
     }
@@ -33,8 +41,21 @@
       throw new Error(msg);
     }
 
-    var supabaseUrl = payload && payload.supabaseUrl ? String(payload.supabaseUrl).trim() : '';
-    var supabaseAnonKey = payload && payload.supabaseAnonKey ? String(payload.supabaseAnonKey).trim() : '';
+    if (!payload) {
+      throw new Error('Config endpoint returned invalid JSON. Ensure the Netlify function is deployed.');
+    }
+
+    var supabaseUrl = firstNonEmpty([
+      payload.supabaseUrl,
+      payload.SUPABASE_URL,
+      window.SUPABASE_URL,
+    ]);
+    var supabaseAnonKey = firstNonEmpty([
+      payload.supabaseAnonKey,
+      payload.supabaseKey,
+      payload.SUPABASE_ANON_KEY,
+      window.SUPABASE_ANON_KEY,
+    ]);
 
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Server misconfiguration: missing Supabase env vars.');

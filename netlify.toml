@@ -7,6 +7,9 @@
   publish = "."          # Static files are at the repo root
   # No build command needed — pure HTML/CSS/JS
 
+[functions]
+  directory = "netlify/functions"
+
 # Serve index.html for all routes so the SPA hash router works
 [[redirects]]
   from   = "/*"
