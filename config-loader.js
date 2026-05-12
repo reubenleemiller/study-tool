@@ -17,8 +17,8 @@
   }
 
   function getFirstNonEmptyString(values) {
-    for (var index = 0; index < values.length; index += 1) {
-      var value = values[index];
+    for (var i = 0; i < values.length; i += 1) {
+      var value = values[i];
       if (value === null || value === undefined) continue;
       var trimmed = String(value).trim();
       if (trimmed) return trimmed;
@@ -29,8 +29,8 @@
   async function loadStudyToolConfig() {
     var response;
     try {
-      var cacheBust = CONFIG_ENDPOINT + (CONFIG_ENDPOINT.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
-      response = await fetch(cacheBust);
+      var configUrl = CONFIG_ENDPOINT + (CONFIG_ENDPOINT.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
+      response = await fetch(configUrl);
     } catch (err) {
       throw new Error('Unable to reach configuration endpoint. Check your Netlify functions.');
     }
