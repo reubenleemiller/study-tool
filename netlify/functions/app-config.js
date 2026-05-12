@@ -25,7 +25,7 @@ exports.handler = async () => {
     statusCode: 200,
     headers: {
       'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'private, max-age=300',
     },
     body: JSON.stringify({
       supabaseUrl: SUPABASE_URL,

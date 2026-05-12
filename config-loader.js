@@ -19,7 +19,7 @@
   async function loadStudyToolConfig() {
     var response;
     try {
-      response = await fetch(CONFIG_ENDPOINT, { cache: 'no-store' });
+      response = await fetch(CONFIG_ENDPOINT);
     } catch (err) {
       throw new Error('Unable to reach configuration endpoint. Check your Netlify functions.');
     }
