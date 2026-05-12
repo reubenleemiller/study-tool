@@ -234,6 +234,10 @@ async function router() {
 
   const path = rawHash.split('#')[1]?.split('?')[0] || '/login';
 
+  if (state.user && !state.profile) {
+    await loadProfile();
+  }
+
   // Auth guard
   if (!PUBLIC_ROUTES.has(path) && !state.user) {
     hidePreloader();
@@ -332,6 +336,23 @@ async function renderLoginPage() {
             <label class="form-label" for="reg-password">Password</label>
             <input class="form-input" type="password" id="reg-password"
                    placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password" />
+            <ul class="pwd-policy" id="reg-pwd-policy" aria-label="Password requirements">
+              <li id="reg-p-len">
+                <i class="fa-regular fa-circle pi"></i> At least 8 characters
+              </li>
+              <li id="reg-p-upper">
+                <i class="fa-regular fa-circle pi"></i> One uppercase letter (A&ndash;Z)
+              </li>
+              <li id="reg-p-lower">
+                <i class="fa-regular fa-circle pi"></i> One lowercase letter (a&ndash;z)
+              </li>
+              <li id="reg-p-digit">
+                <i class="fa-regular fa-circle pi"></i> One number (0&ndash;9)
+              </li>
+              <li id="reg-p-special">
+                <i class="fa-regular fa-circle pi"></i> One special character (!&nbsp;@&nbsp;#&nbsp;…)
+              </li>
+            </ul>
           </div>
           <div class="form-group">
             <label class="form-label" for="reg-confirm">Confirm Password</label>
@@ -374,6 +395,35 @@ async function renderLoginPage() {
     // Success → onAuthStateChange handles redirect
   });
 
+  // ── Password policy (register) ──
+  const REG_CRITERIA = [
+    { id: 'reg-p-len',     test: v => v.length >= 8 },
+    { id: 'reg-p-upper',   test: v => /[A-Z]/.test(v) },
+    { id: 'reg-p-lower',   test: v => /[a-z]/.test(v) },
+    { id: 'reg-p-digit',   test: v => /[0-9]/.test(v) },
+    { id: 'reg-p-special', test: v => /[^A-Za-z0-9]/.test(v) },
+  ];
+
+  function setPolicyIcon(li, met) {
+    const icon = li?.querySelector('.pi');
+    if (!icon) return;
+    icon.className = met
+      ? 'fa-solid fa-circle-check pi'
+      : 'fa-regular fa-circle pi';
+  }
+
+  const regPwdInput = document.getElementById('reg-password');
+  regPwdInput?.addEventListener('input', () => {
+    const v = regPwdInput.value;
+    REG_CRITERIA.forEach(c => {
+      const li = document.getElementById(c.id);
+      const met = c.test(v);
+      if (!li) return;
+      li.classList.toggle('met', met);
+      setPolicyIcon(li, met);
+    });
+  });
+
   // ── Register ──
   document.getElementById('register-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -385,6 +435,11 @@ async function renderLoginPage() {
     clearAlert();
     if (pass !== confirm)   { showAlert('Passwords do not match.');                    return; }
     if (pass.length < 8)    { showAlert('Password must be at least 8 characters.');   return; }
+    const unmet = REG_CRITERIA.filter(c => !c.test(pass));
+    if (unmet.length > 0) {
+      showAlert('Your password does not meet all the requirements listed below.');
+      return;
+    }
     btnLoading(btn, true);
     const { error } = await sb.auth.signUp({
       email, password: pass,
@@ -521,12 +576,30 @@ async function renderSetPasswordPage() {
 
 async function loadProfile() {
   if (!state.user) return;
-  const { data } = await sb
+  const { data, error } = await sb
     .from('profiles')
     .select('*')
     .eq('id', state.user.id)
     .single();
-  if (data) state.profile = data;
+  if (error) {
+    console.warn('Profile load failed:', error.message);
+    state.profile = null;
+    return;
+  }
+  if (data) {
+    state.profile = data;
+    return;
+  }
+  const metaRole = state.user.user_metadata?.role;
+  if (metaRole === 'admin' || metaRole === 'student') {
+    state.profile = {
+      role: metaRole,
+      email: state.user.email || null,
+      full_name: state.user.user_metadata?.full_name || null,
+    };
+  } else {
+    state.profile = null;
+  }
 }
 
 async function signOut() {
