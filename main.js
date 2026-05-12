@@ -445,7 +445,7 @@ async function renderLoginPage() {
       email, password: pass,
       options: {
         data: { full_name: name },
-        emailRedirectTo: `${location.origin}/index.html`,
+        emailRedirectTo: new URL('/index.html', location.origin).href,
       },
     });
     btnLoading(btn, false);
