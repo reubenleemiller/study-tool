@@ -16,7 +16,7 @@
     }
   }
 
-  function firstNonEmpty(values) {
+  function getFirstNonEmptyString(values) {
     for (var i = 0; i < values.length; i += 1) {
       var value = values[i];
       if (value === null || value === undefined) continue;
@@ -50,12 +50,12 @@
       throw new Error('Config endpoint returned invalid JSON. Ensure the Netlify function is deployed.');
     }
 
-    var supabaseUrl = firstNonEmpty([
+    var supabaseUrl = getFirstNonEmptyString([
       payload.supabaseUrl,
       payload.SUPABASE_URL,
       window.SUPABASE_URL,
     ]);
-    var supabaseAnonKey = firstNonEmpty([
+    var supabaseAnonKey = getFirstNonEmptyString([
       payload.supabaseAnonKey,
       payload.supabaseKey,
       payload.SUPABASE_ANON_KEY,
