@@ -29,8 +29,9 @@
   async function loadStudyToolConfig() {
     var response;
     try {
-      var configUrl = CONFIG_ENDPOINT + (CONFIG_ENDPOINT.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
-      response = await fetch(configUrl);
+      var configUrl = new URL(CONFIG_ENDPOINT, window.location.origin);
+      configUrl.searchParams.set('t', Date.now().toString());
+      response = await fetch(configUrl.toString());
     } catch (err) {
       throw new Error('Unable to reach configuration endpoint. Check your Netlify functions.');
     }
@@ -51,13 +52,11 @@
     var supabaseUrl = getFirstNonEmptyString([
       payload.supabaseUrl,
       payload.SUPABASE_URL,
-      window.SUPABASE_URL,
     ]);
     var supabaseAnonKey = getFirstNonEmptyString([
       payload.supabaseAnonKey,
       payload.supabaseKey,
       payload.SUPABASE_ANON_KEY,
-      window.SUPABASE_ANON_KEY,
     ]);
 
     if (!supabaseUrl || !supabaseAnonKey) {
