@@ -590,7 +590,7 @@ async function loadProfile() {
     .from('profiles')
     .select('*')
     .eq('id', state.user.id)
-    .single();
+    .maybeSingle();
   if (error) {
     console.warn('Profile load failed:', error.message);
     state.profile = null;
@@ -1154,7 +1154,7 @@ function renderQuizResults(score, total, percentage, grade, icon, questions, ans
         You answered <strong>${score}</strong> of <strong>${total}</strong> questions correctly.
       </p>
       <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap" class="mb-3">
-        <button class="btn btn-primary btn-lg" onclick="navigate('/quiz')">
+        <button class="btn btn-primary btn-lg" id="results-new-quiz-btn" type="button">
           <i class="fa-solid fa-rocket"></i> New Quiz
         </button>
         <button class="btn btn-outline btn-lg" onclick="navigate('/dashboard')">
@@ -1204,6 +1204,13 @@ function renderQuizResults(score, total, percentage, grade, icon, questions, ans
       const oEl = document.getElementById(`rv-o-${q.id}-${label}`);
       if (oEl) renderKaTeX(oEl);
     });
+  });
+
+  document.getElementById('results-new-quiz-btn')?.addEventListener('click', async () => {
+    if (state.quizTimer) clearInterval(state.quizTimer);
+    state.quiz = null;
+    window.location.hash = '#/quiz';
+    await renderQuizPage();
   });
 }
 
@@ -1592,11 +1599,19 @@ async function renderUsersTab(container) {
                 <td><span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-student'}">${esc(u.role || 'student')}</span></td>
                 <td>${formatDate(u.created_at)}</td>
                 <td>
-                  <button class="btn btn-outline btn-sm" data-toggle-role="${esc(u.id)}"
-                          data-cur-role="${esc(u.role || 'student')}" type="button">
-                    <span class="btn-spinner"></span>
-                    <span class="btn-text">${u.role === 'admin' ? '↓ Student' : '↑ Admin'}</span>
-                  </button>
+                  <div style="display:flex;gap:0.45rem;flex-wrap:wrap">
+                    <button class="btn btn-outline btn-sm" data-toggle-role="${esc(u.id)}"
+                            data-cur-role="${esc(u.role || 'student')}" type="button">
+                      <span class="btn-spinner"></span>
+                      <span class="btn-text">${u.role === 'admin' ? '↓ Student' : '↑ Admin'}</span>
+                    </button>
+                    ${u.role !== 'admin' ? `
+                      <button class="btn btn-danger btn-sm" data-delete-user="${esc(u.id)}"
+                              data-user-email="${esc(u.email || '')}" type="button">
+                        <span class="btn-spinner"></span>
+                        <span class="btn-text"><i class="fa-solid fa-user-xmark"></i> Delete</span>
+                      </button>` : ''}
+                  </div>
                 </td>
               </tr>`).join('')}
           </tbody>
@@ -1613,6 +1628,47 @@ async function renderUsersTab(container) {
       btnLoading(btn, false);
       if (error) toast(error.message, 'error');
       else { toast(`Role changed to ${newRole}.`, 'success'); renderUsersTab(container); }
+    });
+  });
+
+  container.querySelectorAll('[data-delete-user]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.deleteUser;
+      const email = btn.dataset.userEmail || 'this student';
+      showModal({
+        title: 'Delete Student Account',
+        body: `<p>This will permanently delete <strong>${esc(email)}</strong>, including their profile and quiz history. This cannot be undone.</p>`,
+        actions: [
+          { id: 'cancel', label: 'Cancel', cls: 'btn-outline', handler: (_, close) => close() },
+          {
+            id: 'delete', label: 'Delete Student', cls: 'btn-danger',
+            handler: async (modalBtn, close) => {
+              btnLoading(modalBtn, true);
+              try {
+                const { data: { session } } = await sb.auth.getSession();
+                if (!session?.access_token) throw new Error('Please sign in again before deleting a user.');
+
+                const res = await fetch('/.netlify/functions/delete-user', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                  },
+                  body: JSON.stringify({ userId: id }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(json.error || 'Delete failed');
+                close();
+                toast('Student account deleted.', 'success');
+                renderUsersTab(container);
+              } catch (err) {
+                toast(err.message || 'Delete failed', 'error');
+                btnLoading(modalBtn, false);
+              }
+            },
+          },
+        ],
+      });
     });
   });
 }
@@ -1690,14 +1746,7 @@ async function initializeAppWithConfig() {
     APP.supabaseUrl = config.supabaseUrl;
     APP.supabaseKey = config.supabaseAnonKey;
     APP.defaultQuizTime = config.defaultQuizTime || APP.defaultQuizTime;
-    sb = window.supabase.createClient(APP.supabaseUrl, APP.supabaseKey, {
-      global: {
-        headers: {
-          apikey: APP.supabaseKey,
-          Authorization: 'Bearer ' + APP.supabaseKey,
-        },
-      },
-    });
+    sb = window.supabase.createClient(APP.supabaseUrl, APP.supabaseKey);
   } catch (err) {
     renderConfigError(err.message);
     return;

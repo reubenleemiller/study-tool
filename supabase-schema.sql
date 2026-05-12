@@ -21,10 +21,14 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 -- Auto-create a profile row when a new user signs up
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
 BEGIN
-  INSERT INTO profiles (id, email, full_name, role, updated_at)
+  INSERT INTO public.profiles (id, email, full_name, role, updated_at)
   VALUES (
     NEW.id,
     NEW.email,
@@ -32,7 +36,10 @@ BEGIN
     'student',
     NOW()
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE
+  SET email      = EXCLUDED.email,
+      full_name  = EXCLUDED.full_name,
+      updated_at = NOW();
   RETURN NEW;
 END;
 $$;
@@ -40,15 +47,19 @@ $$;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Keep profile fields in sync when auth.users changes
-CREATE OR REPLACE FUNCTION handle_user_updated()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+CREATE OR REPLACE FUNCTION public.handle_user_updated()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
 BEGIN
-  UPDATE profiles
+  UPDATE public.profiles
   SET email      = NEW.email,
-      full_name  = COALESCE(NEW.raw_user_meta_data->>'full_name', full_name),
+      full_name  = COALESCE(NEW.raw_user_meta_data->>'full_name', public.profiles.full_name),
       updated_at = NOW()
   WHERE id = NEW.id;
   RETURN NEW;
@@ -58,7 +69,7 @@ $$;
 DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
 CREATE TRIGGER on_auth_user_updated
   AFTER UPDATE OF email, raw_user_meta_data ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_user_updated();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_user_updated();
 
 -- ─── Questions ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS questions (
@@ -98,8 +109,11 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
 );
 
 -- ─── updated_at trigger helper ─────────────────────────────
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
@@ -109,17 +123,22 @@ $$;
 DROP TRIGGER IF EXISTS set_profiles_updated_at ON profiles;
 CREATE TRIGGER set_profiles_updated_at
   BEFORE UPDATE ON profiles
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 DROP TRIGGER IF EXISTS set_questions_updated_at ON questions;
 CREATE TRIGGER set_questions_updated_at
   BEFORE UPDATE ON questions
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 DROP TRIGGER IF EXISTS set_quiz_sessions_updated_at ON quiz_sessions;
 CREATE TRIGGER set_quiz_sessions_updated_at
   BEFORE UPDATE ON quiz_sessions
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.handle_user_updated() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.handle_new_user() TO supabase_auth_admin;
+GRANT EXECUTE ON FUNCTION public.handle_user_updated() TO supabase_auth_admin;
 
 -- ─── Constraints & additional indexes ──────────────────────
 DO $$
@@ -163,32 +182,52 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_lower ON profiles (lower(em
 
 -- ─── Row-Level Security ──────────────────────────────────────
 
+CREATE SCHEMA IF NOT EXISTS private;
+
+CREATE OR REPLACE FUNCTION private.is_admin(user_id UUID DEFAULT auth.uid())
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = user_id
+      AND p.role = 'admin'
+  );
+$$;
+
+REVOKE ALL ON SCHEMA private FROM PUBLIC;
+GRANT USAGE ON SCHEMA private TO authenticated;
+REVOKE ALL ON FUNCTION private.is_admin(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.is_admin(UUID) TO authenticated;
+
 ALTER TABLE profiles      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE questions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quiz_sessions ENABLE ROW LEVEL SECURITY;
 
 -- profiles: users can read their own; admins can read all
 CREATE POLICY "profiles_select_own" ON profiles
-  FOR SELECT USING (auth.uid() = id);
+  FOR SELECT TO authenticated USING ((SELECT auth.uid()) = id);
 
 CREATE POLICY "profiles_select_admin" ON profiles
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
-  );
+  FOR SELECT TO authenticated USING ((SELECT private.is_admin(auth.uid())));
 
 CREATE POLICY "profiles_update_admin" ON profiles
-  FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
-  );
+  FOR UPDATE TO authenticated
+  USING ((SELECT private.is_admin(auth.uid())))
+  WITH CHECK ((SELECT private.is_admin(auth.uid())));
 
 -- questions: anyone authenticated can read; only admins can write
 CREATE POLICY "questions_read_authenticated" ON questions
   FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "questions_write_admin" ON questions
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
-  );
+  FOR ALL TO authenticated
+  USING ((SELECT private.is_admin(auth.uid())))
+  WITH CHECK ((SELECT private.is_admin(auth.uid())));
 
 -- quiz_sessions: users see only their own rows
 CREATE POLICY "sessions_own" ON quiz_sessions
