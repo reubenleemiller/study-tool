@@ -233,6 +233,11 @@ CREATE POLICY "questions_write_admin" ON questions
 CREATE POLICY "sessions_own" ON quiz_sessions
   FOR ALL USING (auth.uid() = user_id);
 
+CREATE POLICY "sessions_admin" ON quiz_sessions
+  FOR ALL TO authenticated
+  USING ((SELECT private.is_admin(auth.uid())))
+  WITH CHECK ((SELECT private.is_admin(auth.uid())));
+
 -- ─── Indexes ─────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_quiz_sessions_user_id ON quiz_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_sessions_status  ON quiz_sessions (status);

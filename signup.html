@@ -32,6 +32,13 @@
       <!-- Alert banner -->
       <div id="auth-alert" class="auth-error" role="alert"></div>
 
+      <button type="button" class="btn btn-outline btn-full btn-lg google-auth-btn mb-2" id="google-signup-btn">
+        <span class="btn-spinner"></span>
+        <span class="btn-text"><i class="fa-brands fa-google"></i> Sign up with Google</span>
+      </button>
+
+      <div class="auth-divider"><span>or</span></div>
+
       <form id="register-form" novalidate autocomplete="on">
 
         <!-- Full Name -->
@@ -120,6 +127,11 @@
         <p style="color:var(--text-muted);font-size:0.875rem;margin:0">
           Already have an account? <a href="login.html">Sign in</a>
         </p>
+        <p class="auth-legal">
+          <a href="terms.html">Terms of Service</a>
+          <span>&bull;</span>
+          <a href="privacy.html">Privacy Policy</a>
+        </p>
       </div>
 
     </div>
@@ -199,6 +211,21 @@
       });
 
       /* ── Live email validation checkmark ── */
+      document.getElementById('google-signup-btn').addEventListener('click', async function() {
+        clearAlert();
+        var btn = document.getElementById('google-signup-btn');
+        btnLoading(btn, true);
+        var ref = await sb.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: new URL('/index.html', location.origin).href,
+            queryParams: { prompt: 'select_account' },
+          },
+        });
+        btnLoading(btn, false);
+        if (ref.error) showAlert(ref.error.message || 'Google sign-up failed.');
+      });
+
       var emailInput = document.getElementById('email');
       var emailIcon  = document.getElementById('email-valid-icon');
       emailInput.addEventListener('input', function() {

@@ -32,6 +32,13 @@
       <!-- Alert banner -->
       <div id="auth-alert" class="auth-error" role="alert"></div>
 
+      <button type="button" class="btn btn-outline btn-full btn-lg google-auth-btn mb-2" id="google-login-btn">
+        <span class="btn-spinner"></span>
+        <span class="btn-text"><i class="fa-brands fa-google"></i> Sign in with Google</span>
+      </button>
+
+      <div class="auth-divider"><span>or</span></div>
+
       <form id="login-form" novalidate autocomplete="on">
 
         <!-- Email with live-validation checkmark -->
@@ -73,6 +80,11 @@
         </a>
         <p style="color:var(--text-muted);font-size:0.875rem;margin:0">
           Don't have an account? <a href="signup.html">Register here</a>
+        </p>
+        <p class="auth-legal">
+          <a href="terms.html">Terms of Service</a>
+          <span>&bull;</span>
+          <a href="privacy.html">Privacy Policy</a>
         </p>
       </div>
 
@@ -153,6 +165,21 @@
       });
 
       /* ── Sign-in form ── */
+      document.getElementById('google-login-btn').addEventListener('click', async function() {
+        clearAlert();
+        var btn = document.getElementById('google-login-btn');
+        btnLoading(btn, true);
+        var ref = await sb.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: new URL('/index.html', location.origin).href,
+            queryParams: { prompt: 'select_account' },
+          },
+        });
+        btnLoading(btn, false);
+        if (ref.error) showAlert(ref.error.message || 'Google sign-in failed.');
+      });
+
       document.getElementById('login-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         var btn      = document.getElementById('login-btn');

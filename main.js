@@ -297,6 +297,13 @@ async function renderLoginPage() {
 
         <div id="auth-alert" class="auth-error" role="alert"></div>
 
+        <button type="button" class="btn btn-outline btn-full btn-lg google-auth-btn mb-2" id="google-auth-btn">
+          <span class="btn-spinner"></span>
+          <span class="btn-text"><i class="fa-brands fa-google"></i> Continue with Google</span>
+        </button>
+
+        <div class="auth-divider"><span>or</span></div>
+
         <!-- ─── Sign-in form ─── -->
         <form id="login-form" novalidate>
           <div class="form-group">
@@ -365,6 +372,11 @@ async function renderLoginPage() {
           </button>
         </form>
       </div>
+      <div class="auth-legal">
+        <a href="terms.html">Terms</a>
+        <span>&bull;</span>
+        <a href="privacy.html">Privacy</a>
+      </div>
     </div>`;
 
   // ── Tab switching ──
@@ -380,6 +392,7 @@ async function renderLoginPage() {
   }
   document.getElementById('tab-login').addEventListener('click',    () => setTab('login'));
   document.getElementById('tab-register').addEventListener('click', () => setTab('register'));
+  document.getElementById('google-auth-btn')?.addEventListener('click', () => signInWithGoogle());
 
   // ── Sign in ──
   document.getElementById('login-form').addEventListener('submit', async e => {
@@ -458,6 +471,21 @@ async function renderLoginPage() {
 
   // ── Forgot password ──
   document.getElementById('forgot-btn').addEventListener('click', openForgotModal);
+}
+
+async function signInWithGoogle() {
+  clearAlert();
+  const btn = document.getElementById('google-auth-btn') || document.getElementById('google-login-btn') || document.getElementById('google-signup-btn');
+  btnLoading(btn, true);
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: new URL('/index.html', location.origin).href,
+      queryParams: { prompt: 'select_account' },
+    },
+  });
+  btnLoading(btn, false);
+  if (error) showAlert(error.message || 'Google sign-in failed.');
 }
 
 function showAlert(msg, type = 'error') {
@@ -759,6 +787,20 @@ async function loadDashboardStats() {
 }
 
 function pct(s) { return s.total_questions ? Math.round(s.score / s.total_questions * 100) : 0; }
+function computeQuizStats(sessions) {
+  const all = sessions || [];
+  const completed = all.filter(s => s.status === 'completed');
+  const paused = all.filter(s => s.status === 'paused');
+  const total = completed.length;
+  return {
+    completed,
+    paused,
+    total,
+    avgPct: total ? Math.round(completed.reduce((sum, s) => sum + pct(s), 0) / total) : 0,
+    bestPct: total ? Math.max(...completed.map(pct)) : 0,
+    answered: completed.reduce((sum, s) => sum + (s.total_questions || 0), 0),
+  };
+}
 function statCard(icon, value, label) {
   return `<div class="stat-card">
     <div class="stat-icon"><i class="fa-solid fa-${icon}"></i></div>
@@ -1429,9 +1471,24 @@ async function loadQuestions() {
     return;
   }
 
-  container.innerHTML = data.map(q => `
+  container.innerHTML = `
+    <div class="bulk-toolbar" id="question-bulk-toolbar">
+      <label class="bulk-select-all">
+        <input type="checkbox" id="select-all-questions" />
+        <span>Select all</span>
+      </label>
+      <span class="text-muted" id="selected-question-count">0 selected</span>
+      <button class="btn btn-danger btn-sm" id="bulk-delete-questions-btn" type="button" disabled>
+        <span class="btn-spinner"></span>
+        <span class="btn-text"><i class="fa-solid fa-trash"></i> Delete selected</span>
+      </button>
+    </div>
+    ${data.map(q => `
     <div class="question-item">
       <div class="question-item-header">
+        <label class="question-select" aria-label="Select question">
+          <input type="checkbox" class="question-check" value="${esc(q.id)}" />
+        </label>
         <div class="question-item-text" id="qi-${q.id}">${q.question_text}</div>
         <div class="question-item-actions">
           <span style="font-size:0.72rem;color:var(--text-muted);padding:0.18rem 0.5rem;background:var(--bg);border-radius:4px;white-space:nowrap">
@@ -1446,7 +1503,7 @@ async function loadQuestions() {
           </button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`).join('')}`;
 
   // KaTeX on question previews
   data.forEach(q => {
@@ -1481,6 +1538,53 @@ async function loadQuestions() {
       });
     });
   });
+
+  const selectAll = document.getElementById('select-all-questions');
+  const checks = Array.from(container.querySelectorAll('.question-check'));
+  const selectedCount = document.getElementById('selected-question-count');
+  const bulkDeleteBtn = document.getElementById('bulk-delete-questions-btn');
+
+  function updateBulkState() {
+    const count = checks.filter(ch => ch.checked).length;
+    if (selectedCount) selectedCount.textContent = `${count} selected`;
+    if (bulkDeleteBtn) bulkDeleteBtn.disabled = count === 0;
+    if (selectAll) {
+      selectAll.checked = count > 0 && count === checks.length;
+      selectAll.indeterminate = count > 0 && count < checks.length;
+    }
+  }
+
+  selectAll?.addEventListener('change', () => {
+    checks.forEach(ch => { ch.checked = selectAll.checked; });
+    updateBulkState();
+  });
+  checks.forEach(ch => ch.addEventListener('change', updateBulkState));
+  bulkDeleteBtn?.addEventListener('click', () => {
+    const ids = checks.filter(ch => ch.checked).map(ch => ch.value);
+    if (!ids.length) return;
+    showModal({
+      title: 'Delete Selected Questions',
+      body: `<p>Permanently delete <strong>${ids.length}</strong> selected question${ids.length === 1 ? '' : 's'}? This cannot be undone.</p>`,
+      actions: [
+        { id: 'cancel', label: 'Cancel', cls: 'btn-outline', handler: (_, close) => close() },
+        {
+          id: 'delete', label: 'Delete Questions', cls: 'btn-danger',
+          handler: async (btn, close) => {
+            btnLoading(btn, true);
+            const { error } = await sb.from('questions').delete().in('id', ids);
+            btnLoading(btn, false);
+            close();
+            if (error) toast(error.message, 'error');
+            else {
+              toast(`${ids.length} question${ids.length === 1 ? '' : 's'} deleted.`, 'success');
+              loadQuestions();
+            }
+          },
+        },
+      ],
+    });
+  });
+  updateBulkState();
 }
 
 function showQuestionModal(existing) {
@@ -1594,8 +1698,16 @@ async function renderUsersTab(container) {
           <tbody>
             ${(data || []).map(u => `
               <tr>
-                <td>${esc(u.full_name || '—')}</td>
-                <td>${esc(u.email || '—')}</td>
+                <td>
+                  <button class="btn btn-ghost btn-sm" data-view-user="${esc(u.id)}" type="button">
+                    <i class="fa-solid fa-user"></i> ${esc(u.full_name || '—')}
+                  </button>
+                </td>
+                <td>
+                  <button class="btn btn-ghost btn-sm" data-view-user="${esc(u.id)}" type="button">
+                    ${esc(u.email || '—')}
+                  </button>
+                </td>
                 <td><span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-student'}">${esc(u.role || 'student')}</span></td>
                 <td>${formatDate(u.created_at)}</td>
                 <td>
@@ -1628,6 +1740,13 @@ async function renderUsersTab(container) {
       btnLoading(btn, false);
       if (error) toast(error.message, 'error');
       else { toast(`Role changed to ${newRole}.`, 'success'); renderUsersTab(container); }
+    });
+  });
+
+  container.querySelectorAll('[data-view-user]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const user = (data || []).find(u => u.id === btn.dataset.viewUser);
+      if (user) renderUserProfileView(container, user);
     });
   });
 
@@ -1671,6 +1790,60 @@ async function renderUsersTab(container) {
       });
     });
   });
+}
+
+async function renderUserProfileView(container, user) {
+  container.innerHTML = `
+    <div class="admin-section">
+      <div class="page-header">
+        <div>
+          <button class="btn btn-ghost btn-sm mb-1" id="back-to-users-btn" type="button">
+            <i class="fa-solid fa-arrow-left"></i> Users
+          </button>
+          <h3 class="page-title" style="font-size:1.35rem;margin:0">${esc(user.full_name || user.email || 'User')}</h3>
+          <p class="text-muted" style="margin:0.25rem 0 0">${esc(user.email || '')}</p>
+        </div>
+        <span class="role-badge ${user.role === 'admin' ? 'role-admin' : 'role-student'}">${esc(user.role || 'student')}</span>
+      </div>
+      <div id="user-profile-content">
+        <div class="text-center mt-3"><div class="spinner-ring" style="margin:auto"></div></div>
+      </div>
+    </div>`;
+
+  document.getElementById('back-to-users-btn')?.addEventListener('click', () => renderUsersTab(container));
+
+  const content = document.getElementById('user-profile-content');
+  const { data: sessions, error } = await sb
+    .from('quiz_sessions')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    content.innerHTML = alertBox(error.message);
+    return;
+  }
+
+  const stats = computeQuizStats(sessions || []);
+  content.innerHTML = `
+    <div class="stats-grid">
+      ${statCard('trophy', stats.total, 'Completed')}
+      ${statCard('chart-line', stats.avgPct + '%', 'Average Score')}
+      ${statCard('star', stats.bestPct + '%', 'Best Score')}
+      ${statCard('pen', stats.answered, 'Questions Answered')}
+      ${statCard('pause', stats.paused.length, 'Paused')}
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Quiz History</div>
+      </div>
+      ${(sessions || []).length
+        ? `<div class="history-list">${sessions.map(historyItemHTML).join('')}</div>`
+        : `<div class="empty-state">
+            <div class="empty-state-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+            <div class="empty-state-title">No quiz history</div>
+          </div>`}
+    </div>`;
 }
 
 // ── Invite tab ──
