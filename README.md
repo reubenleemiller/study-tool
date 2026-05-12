@@ -66,6 +66,17 @@ After deploying:
 
 ---
 
+## Troubleshooting FAQ
+
+### Supabase signup/login fails or returns 500
+
+- If you upgrade KaTeX, always update the matching `integrity` (SRI) hash in all HTML entry points (`index.html`, `admin.html`), especially for `katex.min.js` and `auto-render.min.js`.
+- Ensure required Netlify environment variables are set (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` for invites). If these are missing, `loadStudyToolConfig` fails and signup/login cannot work.
+- Supabase error meaning:
+  - `No apikey request header or url param was found.` usually means environment variables are missing or Netlify runtime config is misconfigured.
+
+---
+
 ## File Structure
 
 ```
