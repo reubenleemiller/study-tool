@@ -797,6 +797,10 @@ async function loadDashboardStats() {
       ${statCard('spinner', inProgress.length, 'In Progress')}
     </div>
 
+    <div class="card mb-2">
+      ${renderAverageScoreChart(sessions || [], 'Average Score Over Time')}
+    </div>
+
     ${resumable.length ? `
       <div class="card mb-2">
         <div class="card-header">
@@ -1348,7 +1352,10 @@ async function submitQuiz(timeExpired = false) {
   renderQuizResults(score, savedQuestions.length, percentage, grade, icon, savedQuestions, savedAnswers, timeExpired);
 }
 
-function renderQuizResults(score, total, percentage, grade, icon, questions, answers, timeExpired) {
+function renderQuizResults(score, total, percentage, grade, icon, questions, answers, timeExpired, options = {}) {
+  const returnPath = options.returnPath || '/dashboard';
+  const returnLabel = options.returnLabel || 'Dashboard';
+  const returnIcon = options.returnIcon || 'gauge-high';
   // Ensure quiz wrapper exists
   if (!document.getElementById('quiz-wrapper')) {
     document.getElementById('root').innerHTML = headerHTML('/quiz') + `
@@ -1370,8 +1377,8 @@ function renderQuizResults(score, total, percentage, grade, icon, questions, ans
         <button class="btn btn-primary btn-lg" id="results-new-quiz-btn" type="button">
           <i class="fa-solid fa-rocket"></i> New Quiz
         </button>
-        <button class="btn btn-outline btn-lg" onclick="navigate('/dashboard')">
-          <i class="fa-solid fa-gauge-high"></i> Dashboard
+        <button class="btn btn-outline btn-lg" id="results-return-btn" type="button">
+          <i class="fa-solid fa-${esc(returnIcon)}"></i> ${esc(returnLabel)}
         </button>
       </div>
       <hr class="divider" />
@@ -1424,6 +1431,39 @@ function renderQuizResults(score, total, percentage, grade, icon, questions, ans
     state.quiz = null;
     window.location.hash = '#/quiz';
     await renderQuizPage();
+  });
+  document.getElementById('results-return-btn')?.addEventListener('click', () => navigate(returnPath));
+}
+
+async function viewSessionSummary(sessionId, options = {}) {
+  showPreloader();
+  const { data: session, error } = await sb
+    .from('quiz_sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .single();
+  hidePreloader();
+
+  if (error || !session) {
+    toast('Could not load quiz summary.', 'error');
+    return;
+  }
+  if (session.status !== 'completed') {
+    toast('Only completed quizzes have a summary to review.', 'warning');
+    return;
+  }
+
+  const questions = session.questions_data || [];
+  const answers = session.answers || {};
+  const score = Number(session.score || 0);
+  const total = Number(session.total_questions || questions.length || 0);
+  const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+  const { grade, icon } = getGrade(percentage);
+
+  renderQuizResults(score, total, percentage, grade, icon, questions, answers, isTimeExpiredSession(session), {
+    returnPath: options.returnPath || (state.profile?.role === 'admin' ? '/admin' : '/history'),
+    returnLabel: options.returnLabel || (state.profile?.role === 'admin' ? 'Admin' : 'History'),
+    returnIcon: options.returnIcon || (state.profile?.role === 'admin' ? 'gear' : 'clock-rotate-left'),
   });
 }
 
@@ -1521,7 +1561,7 @@ function historyItemHTML(session, options = {}) {
   const progress  = `Q${(session.current_index || 0) + 1}/${session.total_questions}`;
 
   return `
-    <div class="history-item">
+    <div class="history-item${session.status === 'completed' ? ' reviewable' : ''}" ${session.status === 'completed' ? `data-review-row="${esc(session.id)}" role="button" tabindex="0"` : ''}>
       <span class="history-badge ${meta.cls}">
         <i class="fa-solid fa-${meta.icon}"></i> ${esc(meta.label)}
       </span>
@@ -1533,6 +1573,10 @@ function historyItemHTML(session, options = {}) {
         ${isPaused || isActive ? progress : scorePct + '%'}
       </div>
       <div class="history-actions">
+        ${session.status === 'completed' ? `
+          <button class="btn btn-outline btn-sm" data-review="${esc(session.id)}" type="button">
+            <span class="btn-text"><i class="fa-solid fa-eye"></i> Review</span>
+          </button>` : ''}
         ${(isPaused || isActive) && showResume ? `
           <button class="btn btn-primary btn-sm" data-resume="${esc(session.id)}" type="button">
             <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-play"></i> Resume</span>
@@ -1547,6 +1591,20 @@ function historyItemHTML(session, options = {}) {
 
 /** Attach resume + delete event listeners inside a container element */
 function bindHistoryItemActions(container, onUpdate) {
+  container?.querySelectorAll('[data-review-row]').forEach(row => {
+    row.addEventListener('click', event => {
+      if (event.target.closest('button, a')) return;
+      viewSessionSummary(row.dataset.reviewRow);
+    });
+    row.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      viewSessionSummary(row.dataset.reviewRow);
+    });
+  });
+  container?.querySelectorAll('[data-review]').forEach(btn => {
+    btn.addEventListener('click', () => viewSessionSummary(btn.dataset.review));
+  });
   container?.querySelectorAll('[data-resume]').forEach(btn => {
     btn.addEventListener('click', () => resumeQuiz(btn.dataset.resume));
   });
@@ -2016,6 +2074,9 @@ async function renderUserProfileView(container, user) {
     <div class="card">
       <div class="card-header">
         <div class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Quiz History</div>
+        <button class="btn btn-outline btn-sm" id="export-user-history-btn" type="button">
+          <i class="fa-solid fa-file-csv"></i> Export CSV
+        </button>
       </div>
       ${(sessions || []).length
         ? `<div class="history-list">${sessions.map(session => historyItemHTML(session, { showResume: false })).join('')}</div>`
@@ -2026,6 +2087,11 @@ async function renderUserProfileView(container, user) {
     </div>`;
 
   bindHistoryItemActions(content, () => renderUserProfileView(container, user));
+  document.getElementById('export-user-history-btn')?.addEventListener('click', () => {
+    const profilesById = new Map([[user.id, user]]);
+    const slug = (user.email || user.full_name || user.id || 'user').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+    downloadCSV(`studytool-${slug || 'user'}-quiz-history.csv`, sessionCSVRows(sessions || [], profilesById));
+  });
 }
 
 async function renderAdminHistoryTab(container) {
@@ -2047,8 +2113,15 @@ async function renderAdminHistoryTab(container) {
 
   const profilesById = new Map((profiles || []).map(profile => [profile.id, profile]));
   const allSessions = sessions || [];
-  const inProgress = allSessions.filter(session => session.status === 'in_progress');
+  const activeSessions = allSessions.filter(session => session.status === 'in_progress' || session.status === 'paused');
+  const inProgress = activeSessions.filter(session => session.status === 'in_progress');
+  const paused = activeSessions.filter(session => session.status === 'paused');
   const completed = allSessions.filter(session => session.status === 'completed');
+  const userOptions = (profiles || [])
+    .slice()
+    .sort((a, b) => (a.full_name || a.email || '').localeCompare(b.full_name || b.email || ''))
+    .map(profile => `<option value="${esc(profile.id)}">${esc(profile.full_name || profile.email || profile.id)}${profile.email ? ` (${esc(profile.email)})` : ''}</option>`)
+    .join('');
 
   container.innerHTML = `
     <div class="admin-section">
@@ -2057,34 +2130,46 @@ async function renderAdminHistoryTab(container) {
           <div class="admin-section-title" style="margin-bottom:0.35rem">Quiz History</div>
           <h3 class="page-title" style="font-size:1.25rem;margin:0">All User Sessions</h3>
         </div>
-        <button class="btn btn-primary btn-sm" id="export-history-csv-btn" type="button">
-          <i class="fa-solid fa-file-csv"></i> Export CSV
-        </button>
+        <div class="history-export-controls">
+          <select class="form-input" id="export-user-select" aria-label="Choose user for CSV export">
+            <option value="">All users</option>
+            ${userOptions}
+          </select>
+          <button class="btn btn-primary btn-sm" id="export-history-csv-btn" type="button">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+          </button>
+        </div>
       </div>
 
       <div class="stats-grid">
         ${statCard('spinner', inProgress.length, 'In Progress')}
-        ${statCard('pause', allSessions.filter(s => s.status === 'paused').length, 'Paused')}
+        ${statCard('pause', paused.length, 'Paused')}
         ${statCard('circle-check', completed.length, 'Completed')}
         ${statCard('clock', allSessions.filter(isTimeExpiredSession).length, 'Timed Out')}
       </div>
 
       <div class="card mb-2">
         <div class="card-header">
-          <div class="card-title"><i class="fa-solid fa-spinner"></i> In Progress Quizzes</div>
+          <div class="card-title"><i class="fa-solid fa-hourglass-half"></i> Active Quizzes</div>
         </div>
-        ${inProgress.length
-          ? `<div class="history-list">${inProgress.map(session => `
+        ${activeSessions.length
+          ? `<div class="history-list">${activeSessions.map(session => {
+              const meta = sessionStatusMeta(session);
+              return `
               <div class="history-item">
-                <span class="history-badge badge-progress"><i class="fa-solid fa-spinner"></i> In Progress</span>
+                <span class="history-badge ${meta.cls}"><i class="fa-solid fa-${meta.icon}"></i> ${esc(meta.label)}</span>
                 <div class="history-info">
                   <div class="history-title">${esc(getSessionDisplayName(session, profilesById))}</div>
                   <div class="history-meta">${esc(session.category || 'General')} &bull; ${formatDate(session.started_at || session.created_at)}</div>
                 </div>
-                <div class="history-score" style="color:var(--warning)">Q${(session.current_index || 0) + 1}/${session.total_questions || 0}</div>
-              </div>`).join('')}</div>`
+                <div class="history-score" style="color:var(--warning)">
+                  <span style="display:block">Q${(session.current_index || 0) + 1}/${session.total_questions || 0}</span>
+                  <span class="history-meta">${formatTime(session.time_remaining || 0)} left</span>
+                </div>
+              </div>`;
+            }).join('')}</div>`
           : `<div class="empty-state" style="padding:2rem 1rem">
-              <div class="empty-state-title">No quizzes currently in progress</div>
+              <div class="empty-state-title">No paused or in-progress quizzes</div>
             </div>`}
       </div>
 
@@ -2101,7 +2186,7 @@ async function renderAdminHistoryTab(container) {
           <table class="data-table session-table">
             <thead>
               <tr>
-                <th>User</th><th>Status</th><th>Score</th><th>Category</th><th>Progress</th><th>Time</th><th>Started</th><th>Completed</th>
+                <th>User</th><th>Status</th><th>Score</th><th>Category</th><th>Progress</th><th>Time Remaining</th><th>Started</th><th>Completed</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -2120,6 +2205,12 @@ async function renderAdminHistoryTab(container) {
                     <td>${formatTime(session.time_remaining || 0)} / ${formatTime(session.time_limit || 0)}</td>
                     <td>${formatDate(session.started_at || session.created_at)}</td>
                     <td>${formatDate(session.completed_at)}</td>
+                    <td>
+                      ${session.status === 'completed' ? `
+                        <button class="btn btn-outline btn-sm" data-review="${esc(session.id)}" type="button">
+                          <i class="fa-solid fa-eye"></i> Review
+                        </button>` : '—'}
+                    </td>
                   </tr>`;
               }).join('')}
             </tbody>
@@ -2129,8 +2220,16 @@ async function renderAdminHistoryTab(container) {
     </div>`;
 
   document.getElementById('export-history-csv-btn')?.addEventListener('click', () => {
-    downloadCSV(`studytool-quiz-history-${new Date().toISOString().slice(0, 10)}.csv`, sessionCSVRows(allSessions, profilesById));
+    const selectedUserId = document.getElementById('export-user-select')?.value || '';
+    const exportSessions = selectedUserId
+      ? allSessions.filter(session => session.user_id === selectedUserId)
+      : allSessions;
+    const profile = profilesById.get(selectedUserId);
+    const slugBase = selectedUserId ? (profile?.email || profile?.full_name || selectedUserId) : 'all-users';
+    const slug = slugBase.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+    downloadCSV(`studytool-${slug || 'quiz'}-history-${new Date().toISOString().slice(0, 10)}.csv`, sessionCSVRows(exportSessions, profilesById));
   });
+  bindHistoryItemActions(container, () => renderAdminHistoryTab(container));
 }
 
 // ── Invite tab ──
