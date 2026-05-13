@@ -28,6 +28,8 @@ const state = {
   quizTimer:   null,   // setInterval handle for countdown
 };
 
+const QUESTION_IMAGE_BUCKET = 'question-images';
+
 // ============================================================
 // SECTION 2: Utility Helpers
 // ============================================================
@@ -65,6 +67,46 @@ function esc(v) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function sanitizeQuestionHTML(html) {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = String(html || '');
+  const allowed = new Set(['B', 'STRONG', 'I', 'EM', 'MARK', 'UL', 'OL', 'LI', 'P', 'DIV', 'BR', 'SPAN']);
+
+  function clean(node) {
+    Array.from(node.childNodes).forEach(child => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        clean(child);
+        if (!allowed.has(child.tagName)) {
+          child.replaceWith(...Array.from(child.childNodes));
+          return;
+        }
+        Array.from(child.attributes).forEach(attr => {
+          const isHighlight = child.tagName === 'SPAN' &&
+            attr.name === 'style' &&
+            /background-color:\s*(rgb\(255,\s*243,\s*191\)|#fff3bf|yellow)/i.test(attr.value);
+          if (!isHighlight) child.removeAttribute(attr.name);
+        });
+      } else if (child.nodeType !== Node.TEXT_NODE) {
+        child.remove();
+      }
+    });
+  }
+
+  clean(wrapper);
+  return wrapper.innerHTML.trim();
+}
+
+function questionTextHTML(text) {
+  const html = sanitizeQuestionHTML(text || '');
+  return html || esc(text || '');
+}
+
+function questionImageHTML(question) {
+  return question?.image_url
+    ? `<img class="question-image" src="${esc(question.image_url)}" alt="Question reference image" loading="lazy" />`
+    : '';
 }
 
 function renderConfigError(message) {
@@ -1207,9 +1249,10 @@ function renderQuestionUI() {
       <div class="progress-bar-inner" style="width:${progress}%"></div>
     </div>
 
-    <div class="card question-card">
-      <div class="question-number">Question ${idx + 1}</div>
-      <div class="question-text" id="q-text-display">${question.question_text}</div>
+      <div class="card question-card">
+        <div class="question-number">Question ${idx + 1}</div>
+      <div class="question-text" id="q-text-display">${questionTextHTML(question.question_text)}</div>
+      ${questionImageHTML(question)}
       <div class="options-list" id="options-list">
         ${options.map(([label, text]) => `
           <button class="option-btn${selected === label ? ' selected' : ''}" data-label="${esc(label)}" type="button">
@@ -1399,8 +1442,9 @@ function renderQuizResults(score, total, percentage, grade, icon, questions, ans
           return `
             <div style="margin-bottom:1.5rem">
               <div style="font-weight:600;margin-bottom:0.5rem">
-                Q${i + 1}. <span id="rv-q-${q.id}">${q.question_text}</span>
+                Q${i + 1}. <span id="rv-q-${q.id}">${questionTextHTML(q.question_text)}</span>
               </div>
+              ${questionImageHTML(q)}
               <div class="options-list">
                 ${opts.map(([label, text]) => {
                   let cls = '';
@@ -1773,11 +1817,17 @@ async function loadQuestions(category = document.getElementById('question-catego
         <label class="question-select" aria-label="Select question">
           <input type="checkbox" class="question-check" value="${esc(q.id)}" />
         </label>
-        <div class="question-item-text" id="qi-${q.id}">${q.question_text}</div>
+        <div class="question-item-text" id="qi-${q.id}">
+          <div>${questionTextHTML(q.question_text)}</div>
+          ${q.image_url ? '<div class="question-preview-thumb"><i class="fa-solid fa-image"></i> Image attached</div>' : ''}
+        </div>
         <div class="question-item-actions">
           <span style="font-size:0.72rem;color:var(--text-muted);padding:0.18rem 0.5rem;background:var(--bg);border-radius:4px;white-space:nowrap">
             ${esc(q.category || 'General')}
           </span>
+          <button class="btn btn-outline btn-sm" data-preview="${esc(q.id)}" type="button" aria-label="Preview question">
+            <i class="fa-solid fa-eye"></i>
+          </button>
           <button class="btn btn-outline btn-sm" data-edit="${esc(q.id)}" type="button" aria-label="Edit question">
             <i class="fa-solid fa-pen"></i>
           </button>
@@ -1796,6 +1846,13 @@ async function loadQuestions(category = document.getElementById('question-catego
   });
 
   // Edit
+  container.querySelectorAll('[data-preview]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q = data.find(x => x.id === btn.dataset.preview);
+      if (q) showQuestionPreviewModal(q);
+    });
+  });
+
   container.querySelectorAll('[data-edit]').forEach(btn => {
     btn.addEventListener('click', () => {
       const q = data.find(x => x.id === btn.dataset.edit);
@@ -1936,8 +1993,24 @@ function showQuestionModal(existing) {
     title: isEdit ? 'Edit Question' : 'Add Question',
     body: `
       <div class="form-group">
-        <label class="form-label">Question Text <small style="font-weight:400;text-transform:none">(LaTeX: $…$  or  $$…$$)</small></label>
-        <textarea class="form-input" id="qm-text" rows="3" placeholder="Enter question…">${esc(existing?.question_text || '')}</textarea>
+        <label class="form-label">Question Text <small style="font-weight:400;text-transform:none">(LaTeX: $...$  or  $$...$$)</small></label>
+        <div class="editor-toolbar" aria-label="Question formatting toolbar">
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="bold" title="Bold"><i class="fa-solid fa-bold"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="italic" title="Italic"><i class="fa-solid fa-italic"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertUnorderedList" title="Bullets"><i class="fa-solid fa-list-ul"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertOrderedList" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="highlight" title="Highlight"><i class="fa-solid fa-highlighter"></i></button>
+        </div>
+        <div class="rich-editor" id="qm-text" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Enter question...">${questionTextHTML(existing?.question_text || '')}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="qm-image">Question Image <small style="font-weight:400;text-transform:none">(optional)</small></label>
+        <input class="form-input" type="file" id="qm-image" accept="image/*" />
+        <input type="hidden" id="qm-image-url" value="${esc(existing?.image_url || '')}" />
+        <div class="form-hint">Uploads use the public <code>${QUESTION_IMAGE_BUCKET}</code> Supabase Storage bucket.</div>
+        <div id="qm-image-preview" class="question-image-preview">
+          ${existing?.image_url ? questionImageHTML(existing) : ''}
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Option A</label>
@@ -1972,13 +2045,18 @@ function showQuestionModal(existing) {
       <div class="form-group">
         <label class="form-label">Explanation <small style="font-weight:400;text-transform:none">(optional)</small></label>
         <textarea class="form-input" id="qm-exp" rows="2" placeholder="Explain the correct answer…">${esc(existing?.explanation || '')}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Live Preview</label>
+        <div class="question-live-preview" id="qm-live-preview"></div>
       </div>`,
     actions: [
       { id: 'cancel', label: 'Cancel', cls: 'btn-outline', handler: (_, c) => c() },
       {
         id: 'save', label: isEdit ? 'Save Changes' : 'Add Question', cls: 'btn-primary',
         handler: async (btn, close) => {
-          const qText = document.getElementById('qm-text')?.value.trim();
+          const editor = document.getElementById('qm-text');
+          const qText = sanitizeQuestionHTML(editor?.innerHTML || '');
           const optA  = document.getElementById('qm-a')?.value.trim();
           const optB  = document.getElementById('qm-b')?.value.trim();
           const optC  = document.getElementById('qm-c')?.value.trim();
@@ -1993,18 +2071,37 @@ function showQuestionModal(existing) {
           }
 
           btnLoading(btn, true);
+          let imageUrl = document.getElementById('qm-image-url')?.value || null;
+          const imageFile = document.getElementById('qm-image')?.files?.[0];
+          if (imageFile) {
+            try {
+              imageUrl = await uploadQuestionImage(imageFile);
+            } catch (err) {
+              btnLoading(btn, false);
+              toast(err.message || 'Image upload failed.', 'error', 5200);
+              return;
+            }
+          }
           const payload = {
             question_text: qText,
             options:       { A: optA, B: optB, C: optC, D: optD },
             correct_answer:correct,
             category:      category || null,
             explanation:   exp || null,
+            image_url:     imageUrl || null,
             created_by:    state.user.id,
           };
 
-          const { error } = isEdit
+          let { error } = isEdit
             ? await sb.from('questions').update(payload).eq('id', existing.id)
             : await sb.from('questions').insert(payload);
+
+          if (error && /image_url|schema cache|column/i.test(error.message || '')) {
+            delete payload.image_url;
+            ({ error } = isEdit
+              ? await sb.from('questions').update(payload).eq('id', existing.id)
+              : await sb.from('questions').insert(payload));
+          }
 
           btnLoading(btn, false);
           if (error) { toast(error.message, 'error'); return; }
@@ -2015,6 +2112,100 @@ function showQuestionModal(existing) {
       },
     ],
   });
+
+  setupQuestionEditor();
+}
+
+function setupQuestionEditor() {
+  const editor = document.getElementById('qm-text');
+  const preview = document.getElementById('qm-live-preview');
+  const imageInput = document.getElementById('qm-image');
+  const imagePreview = document.getElementById('qm-image-preview');
+  if (!editor || !preview) return;
+
+  function updatePreview() {
+    const html = sanitizeQuestionHTML(editor.innerHTML);
+    const imageUrl = document.getElementById('qm-image-url')?.value;
+    preview.innerHTML = `
+      <div class="question-text">${html || '<span class="text-muted">Question preview appears here.</span>'}</div>
+      ${imageUrl ? `<img class="question-image" src="${esc(imageUrl)}" alt="Question preview image" />` : ''}`;
+    renderKaTeX(preview);
+  }
+
+  document.querySelectorAll('[data-editor-cmd]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editor.focus();
+      const cmd = btn.dataset.editorCmd;
+      if (cmd === 'highlight') {
+        document.execCommand('backColor', false, '#fff3bf');
+      } else {
+        document.execCommand(cmd, false, null);
+      }
+      updatePreview();
+    });
+  });
+
+  editor.addEventListener('input', updatePreview);
+  imageInput?.addEventListener('change', () => {
+    const file = imageInput.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast('Please choose an image file.', 'error');
+      imageInput.value = '';
+      return;
+    }
+    const localUrl = URL.createObjectURL(file);
+    if (imagePreview) {
+      imagePreview.innerHTML = `<img class="question-image" src="${localUrl}" alt="Selected question image preview" />`;
+    }
+  });
+
+  updatePreview();
+}
+
+async function uploadQuestionImage(file) {
+  if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Images must be 5 MB or smaller.');
+
+  const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+  const path = `${state.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { data, error } = await sb.storage
+    .from(QUESTION_IMAGE_BUCKET)
+    .upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (error) throw new Error(error.message);
+
+  const { data: publicData } = sb.storage
+    .from(QUESTION_IMAGE_BUCKET)
+    .getPublicUrl(data.path);
+  if (!publicData?.publicUrl) throw new Error('Image uploaded, but no public URL was returned.');
+  return publicData?.publicUrl;
+}
+
+function showQuestionPreviewModal(q) {
+  const opts = Object.entries(q.options || {});
+  showModal({
+    title: 'Question Preview',
+    body: `
+      <div class="question-text mb-2">${questionTextHTML(q.question_text)}</div>
+      ${questionImageHTML(q)}
+      <div class="options-list mt-2">
+        ${opts.map(([label, text]) => `
+          <div class="option-btn ${label === q.correct_answer ? 'correct' : ''}" style="cursor:default">
+            <div class="option-label">${esc(label)}</div>
+            <div>${text}</div>
+          </div>`).join('')}
+      </div>
+      ${q.explanation ? `<p class="text-muted mt-2"><i class="fa-solid fa-lightbulb"></i> ${esc(q.explanation)}</p>` : ''}`,
+    actions: [
+      { id: 'close', label: 'Close', cls: 'btn-primary', handler: (_, close) => close() },
+    ],
+  });
+  renderKaTeX(document.getElementById('modal-container'));
 }
 
 // ── Users tab ──

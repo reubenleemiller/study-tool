@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS questions (
   correct_answer TEXT NOT NULL CHECK (correct_answer IN ('A','B','C','D')),
   explanation    TEXT,
   category       TEXT,
+  image_url      TEXT,
   display_order  INTEGER,
   difficulty     TEXT DEFAULT 'medium' CHECK (difficulty IN ('easy','medium','hard')),
   created_by     UUID REFERENCES auth.users ON DELETE SET NULL,
@@ -89,6 +90,14 @@ CREATE TABLE IF NOT EXISTS questions (
 
 ALTER TABLE questions
   ADD COLUMN IF NOT EXISTS display_order INTEGER;
+
+ALTER TABLE questions
+  ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+-- ─── Question Images Storage ────────────────────────────────
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('question-images', 'question-images', TRUE)
+ON CONFLICT (id) DO UPDATE SET public = TRUE;
 
 -- ─── Quiz Sessions ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS quiz_sessions (
@@ -236,6 +245,38 @@ CREATE POLICY "questions_write_admin" ON questions
   FOR ALL TO authenticated
   USING ((SELECT private.is_admin(auth.uid())))
   WITH CHECK ((SELECT private.is_admin(auth.uid())));
+
+DROP POLICY IF EXISTS "question_images_read_public" ON storage.objects;
+CREATE POLICY "question_images_read_public" ON storage.objects
+  FOR SELECT USING (bucket_id = 'question-images');
+
+DROP POLICY IF EXISTS "question_images_insert_admin" ON storage.objects;
+CREATE POLICY "question_images_insert_admin" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'question-images'
+    AND (SELECT private.is_admin(auth.uid()))
+  );
+
+DROP POLICY IF EXISTS "question_images_update_admin" ON storage.objects;
+CREATE POLICY "question_images_update_admin" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'question-images'
+    AND (SELECT private.is_admin(auth.uid()))
+  )
+  WITH CHECK (
+    bucket_id = 'question-images'
+    AND (SELECT private.is_admin(auth.uid()))
+  );
+
+DROP POLICY IF EXISTS "question_images_delete_admin" ON storage.objects;
+CREATE POLICY "question_images_delete_admin" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'question-images'
+    AND (SELECT private.is_admin(auth.uid()))
+  );
 
 -- quiz_sessions: users see only their own rows
 CREATE POLICY "sessions_own" ON quiz_sessions

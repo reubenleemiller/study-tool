@@ -687,6 +687,18 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .option-btn.correct  .option-label { background: var(--success); color: #fff; }
 .option-btn.wrong    .option-label { background: var(--danger);  color: #fff; }
 
+.question-image,
+.question-image-preview img {
+  display: block;
+  width: min(100%, 620px);
+  max-height: 360px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  margin: 0.75rem 0 1rem;
+}
+
 .quiz-nav {
   display: flex;
   align-items: center;
@@ -796,6 +808,11 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .question-item-text    { flex: 1; font-size: 0.95rem; line-height: 1.65; min-width: 0; }
 .question-item-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .question-select { display: flex; align-items: flex-start; padding-top: 0.25rem; }
+.question-preview-thumb {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 0.4rem;
+}
 .drag-handle {
   border: none;
   background: transparent;
@@ -809,6 +826,54 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .drag-handle:hover { color: var(--primary); }
 .question-filter-select {
   width: min(100%, 260px);
+}
+.editor-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.rich-editor,
+.question-live-preview {
+  width: 100%;
+  min-height: 130px;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.65;
+  outline: none;
+}
+.rich-editor:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(34,139,230,0.12);
+}
+.rich-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+}
+.rich-editor ul,
+.rich-editor ol,
+.question-live-preview ul,
+.question-live-preview ol,
+.question-text ul,
+.question-text ol {
+  padding-left: 1.35rem;
+  margin: 0.35rem 0;
+}
+.rich-editor mark,
+.rich-editor span[style*="background-color"],
+.question-live-preview mark,
+.question-live-preview span[style*="background-color"],
+.question-text mark,
+.question-text span[style*="background-color"] {
+  background: #fff3bf;
+  border-radius: 3px;
+  padding: 0 0.12rem;
+}
+.question-image-preview:empty {
+  display: none;
 }
 .question-check,
 .bulk-select-all input {
