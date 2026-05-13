@@ -475,9 +475,9 @@ async function renderLoginPage() {
               </button>
             </form>
             <div class="auth-legal">
-              <a href="terms.html">Terms</a>
+              <a href="terms.html">Terms of Service</a>
               <span>&bull;</span>
-              <a href="privacy.html">Privacy</a>
+              <a href="privacy.html">Privacy Policy</a>
             </div>
           </div>
         </div>
