@@ -806,6 +806,17 @@ textarea.form-input { resize: vertical; min-height: 90px; }
   gap: 1rem;
 }
 .question-item-text    { flex: 1; font-size: 0.95rem; line-height: 1.65; min-width: 0; }
+.question-item-text p,
+.question-item-text div { margin: 0; }
+.question-item-text ul,
+.question-item-text ol {
+  margin: 0.15rem 0;
+  padding-left: 1.1rem;
+}
+.question-item-text li {
+  margin: 0.05rem 0;
+  padding-left: 0.1rem;
+}
 .question-item-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .question-select { display: flex; align-items: flex-start; padding-top: 0.25rem; }
 .question-preview-thumb {
@@ -858,7 +869,9 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .question-live-preview ul,
 .question-live-preview ol,
 .question-text ul,
-.question-text ol {
+.question-text ol,
+.explanation-text ul,
+.explanation-text ol {
   padding-left: 1.35rem;
   margin: 0.35rem 0;
 }
@@ -867,10 +880,20 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .question-live-preview mark,
 .question-live-preview span[style*="background-color"],
 .question-text mark,
-.question-text span[style*="background-color"] {
+.question-text span[style*="background-color"],
+.question-item-text mark,
+.question-item-text span[style*="background-color"],
+.explanation-text mark,
+.explanation-text span[style*="background-color"] {
   background: #fff3bf;
   border-radius: 3px;
   padding: 0 0.12rem;
+}
+.explanation-text {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+  margin-top: 0.45rem;
 }
 .question-image-preview:empty {
   display: none;

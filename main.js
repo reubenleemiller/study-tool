@@ -72,7 +72,7 @@ function esc(v) {
 function sanitizeQuestionHTML(html) {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = String(html || '');
-  const allowed = new Set(['B', 'STRONG', 'I', 'EM', 'MARK', 'UL', 'OL', 'LI', 'P', 'DIV', 'BR', 'SPAN']);
+  const allowed = new Set(['B', 'STRONG', 'I', 'EM', 'MARK', 'UL', 'OL', 'LI', 'P', 'DIV', 'BR', 'SPAN', 'FONT']);
 
   function clean(node) {
     Array.from(node.childNodes).forEach(child => {
@@ -83,10 +83,15 @@ function sanitizeQuestionHTML(html) {
           return;
         }
         Array.from(child.attributes).forEach(attr => {
-          const isHighlight = child.tagName === 'SPAN' &&
-            attr.name === 'style' &&
-            /background-color:\s*(rgb\(255,\s*243,\s*191\)|#fff3bf|yellow)/i.test(attr.value);
-          if (!isHighlight) child.removeAttribute(attr.name);
+          const isHighlight =
+            (attr.name === 'style' && /background(?:-color)?:\s*(rgb\(\s*255,\s*243,\s*191\s*\)|#fff3bf|yellow)/i.test(attr.value)) ||
+            (attr.name === 'color' && /#?fff3bf|yellow/i.test(attr.value));
+          if (isHighlight) {
+            child.removeAttribute(attr.name);
+            child.setAttribute('style', 'background-color:#fff3bf');
+          } else {
+            child.removeAttribute(attr.name);
+          }
         });
       } else if (child.nodeType !== Node.TEXT_NODE) {
         child.remove();
@@ -107,6 +112,26 @@ function questionImageHTML(question) {
   return question?.image_url
     ? `<img class="question-image" src="${esc(question.image_url)}" alt="Question reference image" loading="lazy" />`
     : '';
+}
+
+function questionImageStoragePath(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const marker = `/storage/v1/object/public/${QUESTION_IMAGE_BUCKET}/`;
+    const index = parsed.pathname.indexOf(marker);
+    if (index === -1) return '';
+    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
+  } catch {
+    return '';
+  }
+}
+
+async function removeQuestionImages(questions) {
+  const paths = [...new Set((questions || []).map(q => questionImageStoragePath(q.image_url)).filter(Boolean))];
+  if (!paths.length) return null;
+  const { error } = await sb.storage.from(QUESTION_IMAGE_BUCKET).remove(paths);
+  return error || null;
 }
 
 function renderConfigError(message) {
@@ -1462,7 +1487,7 @@ function renderQuizResults(score, total, percentage, grade, icon, questions, ans
                   ? '<i class="fa-solid fa-circle-check"></i> Correct.'
                   : `<i class="fa-solid fa-circle-xmark"></i> You chose: ${esc(ua || '(none)')} — Correct: ${esc(q.correct_answer)}`}
               </p>
-              ${q.explanation ? `<p style="font-size:0.83rem;color:var(--text-muted);font-style:italic;margin-top:0.2rem"><i class="fa-solid fa-lightbulb"></i> ${esc(q.explanation)}</p>` : ''}
+              ${q.explanation ? `<div class="explanation-text"><i class="fa-solid fa-lightbulb"></i> ${questionTextHTML(q.explanation)}</div>` : ''}
             </div>`;
         }).join('')}
       </div>
@@ -1863,6 +1888,7 @@ async function loadQuestions(category = document.getElementById('question-catego
   // Delete
   container.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', () => {
+      const question = data.find(x => x.id === btn.dataset.del);
       showModal({
         title: 'Delete Question',
         body:  '<p>Permanently delete this question?</p>',
@@ -1871,9 +1897,13 @@ async function loadQuestions(category = document.getElementById('question-catego
           { id: 'confirm', label: 'Delete', cls: 'btn-danger',  handler: async (b, c) => {
             btnLoading(b, true);
             const { error } = await sb.from('questions').delete().eq('id', btn.dataset.del);
+            const imageError = error ? null : await removeQuestionImages(question ? [question] : []);
             btnLoading(b, false); c();
             if (error) toast(error.message, 'error');
-            else { toast('Question deleted.', 'success'); loadQuestions(); }
+            else {
+              toast(imageError ? `Question deleted, but image cleanup failed: ${imageError.message}` : 'Question deleted.', imageError ? 'warning' : 'success', 5200);
+              loadQuestions();
+            }
           }},
         ],
       });
@@ -1913,11 +1943,18 @@ async function loadQuestions(category = document.getElementById('question-catego
           handler: async (btn, close) => {
             btnLoading(btn, true);
             const { error } = await sb.from('questions').delete().in('id', ids);
+            const imageError = error ? null : await removeQuestionImages(data.filter(q => ids.includes(q.id)));
             btnLoading(btn, false);
             close();
             if (error) toast(error.message, 'error');
             else {
-              toast(`${ids.length} question${ids.length === 1 ? '' : 's'} deleted.`, 'success');
+              toast(
+                imageError
+                  ? `${ids.length} question${ids.length === 1 ? '' : 's'} deleted, but image cleanup failed: ${imageError.message}`
+                  : `${ids.length} question${ids.length === 1 ? '' : 's'} deleted.`,
+                imageError ? 'warning' : 'success',
+                imageError ? 5200 : 3800
+              );
               loadQuestions();
             }
           },
@@ -1995,11 +2032,11 @@ function showQuestionModal(existing) {
       <div class="form-group">
         <label class="form-label">Question Text <small style="font-weight:400;text-transform:none">(LaTeX: $...$  or  $$...$$)</small></label>
         <div class="editor-toolbar" aria-label="Question formatting toolbar">
-          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="bold" title="Bold"><i class="fa-solid fa-bold"></i></button>
-          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="italic" title="Italic"><i class="fa-solid fa-italic"></i></button>
-          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertUnorderedList" title="Bullets"><i class="fa-solid fa-list-ul"></i></button>
-          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertOrderedList" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
-          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="highlight" title="Highlight"><i class="fa-solid fa-highlighter"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="bold" data-editor-target="qm-text" title="Bold"><i class="fa-solid fa-bold"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="italic" data-editor-target="qm-text" title="Italic"><i class="fa-solid fa-italic"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertUnorderedList" data-editor-target="qm-text" title="Bullets"><i class="fa-solid fa-list-ul"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertOrderedList" data-editor-target="qm-text" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="highlight" data-editor-target="qm-text" title="Highlight"><i class="fa-solid fa-highlighter"></i></button>
         </div>
         <div class="rich-editor" id="qm-text" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Enter question...">${questionTextHTML(existing?.question_text || '')}</div>
       </div>
@@ -2051,7 +2088,14 @@ function showQuestionModal(existing) {
       </div>
       <div class="form-group">
         <label class="form-label">Explanation <small style="font-weight:400;text-transform:none">(optional)</small></label>
-        <textarea class="form-input" id="qm-exp" rows="2" placeholder="Explain the correct answer…">${esc(existing?.explanation || '')}</textarea>
+        <div class="editor-toolbar" aria-label="Explanation formatting toolbar">
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="bold" data-editor-target="qm-exp" title="Bold"><i class="fa-solid fa-bold"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="italic" data-editor-target="qm-exp" title="Italic"><i class="fa-solid fa-italic"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertUnorderedList" data-editor-target="qm-exp" title="Bullets"><i class="fa-solid fa-list-ul"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertOrderedList" data-editor-target="qm-exp" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="highlight" data-editor-target="qm-exp" title="Highlight"><i class="fa-solid fa-highlighter"></i></button>
+        </div>
+        <div class="rich-editor" id="qm-exp" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Explain the correct answer...">${questionTextHTML(existing?.explanation || '')}</div>
       </div>
       <div class="form-group">
         <label class="form-label">Live Preview</label>
@@ -2070,7 +2114,7 @@ function showQuestionModal(existing) {
           const optD  = document.getElementById('qm-d')?.value.trim();
           const correct  = document.getElementById('qm-correct')?.value;
           const category = document.getElementById('qm-cat')?.value.trim();
-          const exp      = document.getElementById('qm-exp')?.value.trim();
+          const exp      = sanitizeQuestionHTML(document.getElementById('qm-exp')?.innerHTML || '');
 
           if (!qText || !optA || !optB || !optC || !optD) {
             toast('Please fill in all required fields.', 'error');
@@ -2125,6 +2169,7 @@ function showQuestionModal(existing) {
 
 function setupQuestionEditor() {
   const editor = document.getElementById('qm-text');
+  const explanationEditor = document.getElementById('qm-exp');
   const preview = document.getElementById('qm-live-preview');
   const imageInput = document.getElementById('qm-image');
   const imagePreview = document.getElementById('qm-image-preview');
@@ -2133,16 +2178,19 @@ function setupQuestionEditor() {
 
   function updatePreview() {
     const html = sanitizeQuestionHTML(editor.innerHTML);
+    const explanationHTML = sanitizeQuestionHTML(explanationEditor?.innerHTML || '');
     const imageUrl = document.getElementById('qm-image-url')?.value;
     preview.innerHTML = `
       <div class="question-text">${html || '<span class="text-muted">Question preview appears here.</span>'}</div>
-      ${imageUrl ? `<img class="question-image" src="${esc(imageUrl)}" alt="Question preview image" />` : ''}`;
+      ${imageUrl ? `<img class="question-image" src="${esc(imageUrl)}" alt="Question preview image" />` : ''}
+      ${explanationHTML ? `<div class="explanation-text"><i class="fa-solid fa-lightbulb"></i> ${explanationHTML}</div>` : ''}`;
     renderKaTeX(preview);
   }
 
   document.querySelectorAll('[data-editor-cmd]').forEach(btn => {
     btn.addEventListener('click', () => {
-      editor.focus();
+      const target = document.getElementById(btn.dataset.editorTarget || 'qm-text') || editor;
+      target.focus();
       const cmd = btn.dataset.editorCmd;
       if (cmd === 'highlight') {
         document.execCommand('backColor', false, '#fff3bf');
@@ -2154,6 +2202,7 @@ function setupQuestionEditor() {
   });
 
   editor.addEventListener('input', updatePreview);
+  explanationEditor?.addEventListener('input', updatePreview);
   imageInput?.addEventListener('change', () => {
     const file = imageInput.files?.[0];
     if (!file) return;
@@ -2209,7 +2258,7 @@ function showQuestionPreviewModal(q) {
             <div>${text}</div>
           </div>`).join('')}
       </div>
-      ${q.explanation ? `<p class="text-muted mt-2"><i class="fa-solid fa-lightbulb"></i> ${esc(q.explanation)}</p>` : ''}`,
+      ${q.explanation ? `<div class="explanation-text"><i class="fa-solid fa-lightbulb"></i> ${questionTextHTML(q.explanation)}</div>` : ''}`,
     actions: [
       { id: 'close', label: 'Close', cls: 'btn-primary', handler: (_, close) => close() },
     ],
