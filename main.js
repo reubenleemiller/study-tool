@@ -2005,7 +2005,14 @@ function showQuestionModal(existing) {
       </div>
       <div class="form-group">
         <label class="form-label" for="qm-image">Question Image <small style="font-weight:400;text-transform:none">(optional)</small></label>
-        <input class="form-input" type="file" id="qm-image" accept="image/*" />
+        <div class="file-upload-control">
+          <input class="file-upload-input" type="file" id="qm-image" accept="image/*" />
+          <label class="file-upload-btn" for="qm-image">
+            <i class="fa-solid fa-image"></i>
+            <span>Choose Image</span>
+          </label>
+          <span class="file-upload-name" id="qm-image-name">${existing?.image_url ? 'Current image attached' : 'No image selected'}</span>
+        </div>
         <input type="hidden" id="qm-image-url" value="${esc(existing?.image_url || '')}" />
         <div class="form-hint">Uploads use the public <code>${QUESTION_IMAGE_BUCKET}</code> Supabase Storage bucket.</div>
         <div id="qm-image-preview" class="question-image-preview">
@@ -2121,6 +2128,7 @@ function setupQuestionEditor() {
   const preview = document.getElementById('qm-live-preview');
   const imageInput = document.getElementById('qm-image');
   const imagePreview = document.getElementById('qm-image-preview');
+  const imageName = document.getElementById('qm-image-name');
   if (!editor || !preview) return;
 
   function updatePreview() {
@@ -2154,6 +2162,7 @@ function setupQuestionEditor() {
       imageInput.value = '';
       return;
     }
+    if (imageName) imageName.textContent = file.name;
     const localUrl = URL.createObjectURL(file);
     if (imagePreview) {
       imagePreview.innerHTML = `<img class="question-image" src="${localUrl}" alt="Selected question image preview" />`;
