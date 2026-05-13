@@ -284,98 +284,132 @@ window.addEventListener('hashchange', router);
 async function renderLoginPage() {
   document.getElementById('root').innerHTML = `
     <div class="auth-page">
-      <div class="auth-card">
-        <div class="auth-logo">
-          <h1><i class="fa-solid fa-book-open"></i> ${esc(APP.name)}</h1>
-          <p>Your interactive study companion</p>
-        </div>
-
-        <div class="auth-tabs" role="tablist">
-          <button class="auth-tab active" id="tab-login"    role="tab" aria-selected="true">Sign In</button>
-          <button class="auth-tab"        id="tab-register" role="tab" aria-selected="false">Register</button>
-        </div>
-
-        <div id="auth-alert" class="auth-error" role="alert"></div>
-
-        <button type="button" class="btn btn-outline btn-full btn-lg google-auth-btn mb-2" id="google-auth-btn">
-          <span class="btn-spinner"></span>
-          <span class="btn-text"><i class="fa-brands fa-google"></i> Continue with Google</span>
-        </button>
-
-        <div class="auth-divider"><span>or</span></div>
-
-        <!-- ─── Sign-in form ─── -->
-        <form id="login-form" novalidate>
-          <div class="form-group">
-            <label class="form-label" for="li-email">Email</label>
-            <input class="form-input" type="email" id="li-email"
-                   placeholder="you@example.com" required autocomplete="email" />
+      <div class="auth-shell">
+        <section class="auth-info" aria-labelledby="homepage-title">
+          <div class="auth-brand">
+            <i class="fa-solid fa-book-open"></i>
+            <span>${esc(APP.name)}</span>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="li-password">Password</label>
-            <input class="form-input" type="password" id="li-password"
-                   placeholder="••••••••" required autocomplete="current-password" />
+          <h1 id="homepage-title">Practice multiple-choice quizzes with timed sessions, progress tracking, and math support.</h1>
+          <p>
+            ${esc(APP.name)} helps students prepare with focused MCQ practice, pause-and-resume quizzes,
+            score history, category filtering, and readable KaTeX rendering for science and math questions.
+          </p>
+          <div class="auth-feature-grid" aria-label="Application features">
+            <div class="auth-feature">
+              <i class="fa-solid fa-list-check"></i>
+              <span>Configurable quizzes by category and question count</span>
+            </div>
+            <div class="auth-feature">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <span>Saved quiz history, scores, and paused sessions</span>
+            </div>
+            <div class="auth-feature">
+              <i class="fa-solid fa-square-root-variable"></i>
+              <span>Formatted math expressions for technical study material</span>
+            </div>
+            <div class="auth-feature">
+              <i class="fa-solid fa-shield-halved"></i>
+              <span>Google sign-in and email/password accounts powered by Supabase</span>
+            </div>
           </div>
-          <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-submit-btn">
-            <span class="btn-spinner"></span>
-            <span class="btn-text">Sign In</span>
-          </button>
-          <div class="text-center mt-2">
-            <button type="button" class="btn btn-ghost btn-sm" id="forgot-btn">
-              Forgot password?
+        </section>
+
+        <div class="auth-panel">
+          <div class="auth-card">
+            <div class="auth-logo">
+              <h2><i class="fa-solid fa-book-open"></i> ${esc(APP.name)}</h2>
+              <p>Your interactive study companion</p>
+            </div>
+
+            <div class="auth-tabs" role="tablist">
+              <button class="auth-tab active" id="tab-login"    role="tab" aria-selected="true">Sign In</button>
+              <button class="auth-tab"        id="tab-register" role="tab" aria-selected="false">Register</button>
+            </div>
+
+            <div id="auth-alert" class="auth-error" role="alert"></div>
+
+            <button type="button" class="btn btn-outline btn-full btn-lg google-auth-btn mb-2" id="google-auth-btn">
+              <span class="btn-spinner"></span>
+              <span class="btn-text"><i class="fa-brands fa-google"></i> Continue with Google</span>
             </button>
-          </div>
-        </form>
 
-        <!-- ─── Register form ─── -->
-        <form id="register-form" style="display:none" novalidate>
-          <div class="form-group">
-            <label class="form-label" for="reg-name">Full Name</label>
-            <input class="form-input" type="text" id="reg-name"
-                   placeholder="Your full name" required autocomplete="name" />
+            <div class="auth-divider"><span>or</span></div>
+
+            <!-- ─── Sign-in form ─── -->
+            <form id="login-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="li-email">Email</label>
+                <input class="form-input" type="email" id="li-email"
+                       placeholder="you@example.com" required autocomplete="email" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="li-password">Password</label>
+                <input class="form-input" type="password" id="li-password"
+                       placeholder="Password" required autocomplete="current-password" />
+              </div>
+              <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-submit-btn">
+                <span class="btn-spinner"></span>
+                <span class="btn-text">Sign In</span>
+              </button>
+              <div class="text-center mt-2">
+                <button type="button" class="btn btn-ghost btn-sm" id="forgot-btn">
+                  Forgot password?
+                </button>
+              </div>
+            </form>
+
+            <!-- ─── Register form ─── -->
+            <form id="register-form" style="display:none" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="reg-name">Full Name</label>
+                <input class="form-input" type="text" id="reg-name"
+                       placeholder="Your full name" required autocomplete="name" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="reg-email">Email</label>
+                <input class="form-input" type="email" id="reg-email"
+                       placeholder="you@example.com" required autocomplete="email" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="reg-password">Password</label>
+                <input class="form-input" type="password" id="reg-password"
+                       placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password" />
+                <ul class="pwd-policy" id="reg-pwd-policy" aria-label="Password requirements">
+                  <li id="reg-p-len">
+                    <i class="fa-regular fa-circle pi"></i> At least 8 characters
+                  </li>
+                  <li id="reg-p-upper">
+                    <i class="fa-regular fa-circle pi"></i> One uppercase letter (A&ndash;Z)
+                  </li>
+                  <li id="reg-p-lower">
+                    <i class="fa-regular fa-circle pi"></i> One lowercase letter (a&ndash;z)
+                  </li>
+                  <li id="reg-p-digit">
+                    <i class="fa-regular fa-circle pi"></i> One number (0&ndash;9)
+                  </li>
+                  <li id="reg-p-special">
+                    <i class="fa-regular fa-circle pi"></i> One special character (!&nbsp;@&nbsp;#&nbsp;...)
+                  </li>
+                </ul>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="reg-confirm">Confirm Password</label>
+                <input class="form-input" type="password" id="reg-confirm"
+                       placeholder="Repeat your password" required autocomplete="new-password" />
+              </div>
+              <button type="submit" class="btn btn-primary btn-full btn-lg" id="reg-submit-btn">
+                <span class="btn-spinner"></span>
+                <span class="btn-text">Create Account</span>
+              </button>
+            </form>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="reg-email">Email</label>
-            <input class="form-input" type="email" id="reg-email"
-                   placeholder="you@example.com" required autocomplete="email" />
+          <div class="auth-legal">
+            <a href="terms.html">Terms</a>
+            <span>&bull;</span>
+            <a href="privacy.html">Privacy</a>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="reg-password">Password</label>
-            <input class="form-input" type="password" id="reg-password"
-                   placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password" />
-            <ul class="pwd-policy" id="reg-pwd-policy" aria-label="Password requirements">
-              <li id="reg-p-len">
-                <i class="fa-regular fa-circle pi"></i> At least 8 characters
-              </li>
-              <li id="reg-p-upper">
-                <i class="fa-regular fa-circle pi"></i> One uppercase letter (A&ndash;Z)
-              </li>
-              <li id="reg-p-lower">
-                <i class="fa-regular fa-circle pi"></i> One lowercase letter (a&ndash;z)
-              </li>
-              <li id="reg-p-digit">
-                <i class="fa-regular fa-circle pi"></i> One number (0&ndash;9)
-              </li>
-              <li id="reg-p-special">
-                <i class="fa-regular fa-circle pi"></i> One special character (!&nbsp;@&nbsp;#&nbsp;…)
-              </li>
-            </ul>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="reg-confirm">Confirm Password</label>
-            <input class="form-input" type="password" id="reg-confirm"
-                   placeholder="Repeat your password" required autocomplete="new-password" />
-          </div>
-          <button type="submit" class="btn btn-primary btn-full btn-lg" id="reg-submit-btn">
-            <span class="btn-spinner"></span>
-            <span class="btn-text">Create Account</span>
-          </button>
-        </form>
-      </div>
-      <div class="auth-legal">
-        <a href="terms.html">Terms</a>
-        <span>&bull;</span>
-        <a href="privacy.html">Privacy</a>
+        </div>
       </div>
     </div>`;
 
@@ -1339,8 +1373,9 @@ async function renderHistoryPage() {
 }
 
 /** Build the HTML for a single history list item */
-function historyItemHTML(session) {
+function historyItemHTML(session, options = {}) {
   const isPaused  = session.status === 'paused';
+  const showResume = options.showResume !== false;
   const scorePct  = session.total_questions > 0 ? Math.round(session.score / session.total_questions * 100) : 0;
   const progress  = `Q${(session.current_index || 0) + 1}/${session.total_questions}`;
 
@@ -1359,7 +1394,7 @@ function historyItemHTML(session) {
         ${isPaused ? progress : scorePct + '%'}
       </div>
       <div class="history-actions">
-        ${isPaused ? `
+        ${isPaused && showResume ? `
           <button class="btn btn-primary btn-sm" data-resume="${esc(session.id)}" type="button">
             <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-play"></i> Resume</span>
           </button>` : ''}
@@ -1838,12 +1873,14 @@ async function renderUserProfileView(container, user) {
         <div class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Quiz History</div>
       </div>
       ${(sessions || []).length
-        ? `<div class="history-list">${sessions.map(historyItemHTML).join('')}</div>`
+        ? `<div class="history-list">${sessions.map(session => historyItemHTML(session, { showResume: false })).join('')}</div>`
         : `<div class="empty-state">
             <div class="empty-state-icon"><i class="fa-solid fa-clipboard-list"></i></div>
             <div class="empty-state-title">No quiz history</div>
           </div>`}
     </div>`;
+
+  bindHistoryItemActions(content, () => renderUserProfileView(container, user));
 }
 
 // ── Invite tab ──
