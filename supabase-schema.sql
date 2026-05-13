@@ -80,11 +80,15 @@ CREATE TABLE IF NOT EXISTS questions (
   correct_answer TEXT NOT NULL CHECK (correct_answer IN ('A','B','C','D')),
   explanation    TEXT,
   category       TEXT,
+  display_order  INTEGER,
   difficulty     TEXT DEFAULT 'medium' CHECK (difficulty IN ('easy','medium','hard')),
   created_by     UUID REFERENCES auth.users ON DELETE SET NULL,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE questions
+  ADD COLUMN IF NOT EXISTS display_order INTEGER;
 
 -- ─── Quiz Sessions ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS quiz_sessions (
@@ -246,3 +250,4 @@ CREATE POLICY "sessions_admin" ON quiz_sessions
 CREATE INDEX IF NOT EXISTS idx_quiz_sessions_user_id ON quiz_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_sessions_status  ON quiz_sessions (status);
 CREATE INDEX IF NOT EXISTS idx_questions_category    ON questions     (category);
+CREATE INDEX IF NOT EXISTS idx_questions_display_order ON questions   (display_order);

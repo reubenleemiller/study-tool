@@ -1077,7 +1077,15 @@ async function renderQuizPage() {
 async function startNewQuiz({ category, count, timeLimit, doShuffle }) {
   let query = sb.from('questions').select('*');
   if (category) query = query.eq('category', category);
-  const { data: questions, error } = await query;
+  let { data: questions, error } = await query
+    .order('display_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false });
+
+  if (error && /display_order|schema cache|column/i.test(error.message || '')) {
+    query = sb.from('questions').select('*');
+    if (category) query = query.eq('category', category);
+    ({ data: questions, error } = await query.order('created_at', { ascending: false }));
+  }
 
   if (error || !questions?.length) {
     toast('No questions found for the selected criteria.', 'error');
@@ -1673,11 +1681,21 @@ async function renderAdminPage() {
 async function renderQuestionsTab(container) {
   container.innerHTML = `
     <div class="admin-section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
         <div class="admin-section-title">MCQ Questions</div>
         <button class="btn btn-primary btn-sm" id="add-q-btn" type="button">
           <span class="btn-spinner"></span><span class="btn-text">+ Add Question</span>
         </button>
+      </div>
+      <div class="bulk-toolbar">
+        <label class="bulk-select-all" for="question-category-filter">
+          <i class="fa-solid fa-filter"></i>
+          <span>Category</span>
+        </label>
+        <select class="form-input question-filter-select" id="question-category-filter">
+          <option value="">All categories</option>
+        </select>
+        <span class="text-muted" style="font-size:0.82rem">Drag questions by the handle to reorder the current list.</span>
       </div>
       <div id="questions-list">
         <div class="text-center mt-3"><div class="spinner-ring" style="margin:auto"></div></div>
@@ -1685,22 +1703,51 @@ async function renderQuestionsTab(container) {
     </div>`;
 
   document.getElementById('add-q-btn')?.addEventListener('click', () => showQuestionModal(null));
+  await populateQuestionCategoryFilter();
+  document.getElementById('question-category-filter')?.addEventListener('change', event => {
+    loadQuestions(event.target.value);
+  });
   await loadQuestions();
 }
 
-async function loadQuestions() {
+async function populateQuestionCategoryFilter() {
+  const sel = document.getElementById('question-category-filter');
+  if (!sel) return;
+
+  const { data, error } = await sb.from('questions').select('category').not('category', 'is', null);
+  if (error) return;
+
+  const current = sel.value;
+  const categories = [...new Set((data || []).map(row => row.category).filter(Boolean))].sort();
+  sel.innerHTML = `
+    <option value="">All categories</option>
+    ${categories.map(category => `<option value="${esc(category)}">${esc(category)}</option>`).join('')}`;
+  sel.value = categories.includes(current) ? current : '';
+}
+
+async function loadQuestions(category = document.getElementById('question-category-filter')?.value || '') {
   const container = document.getElementById('questions-list');
   if (!container) return;
 
-  const { data, error } = await sb.from('questions').select('*').order('created_at', { ascending: false });
+  let query = sb.from('questions').select('*');
+  if (category) query = query.eq('category', category);
+  let { data, error } = await query
+    .order('display_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false });
+
+  if (error && /display_order|schema cache|column/i.test(error.message || '')) {
+    query = sb.from('questions').select('*');
+    if (category) query = query.eq('category', category);
+    ({ data, error } = await query.order('created_at', { ascending: false }));
+  }
 
   if (error) { container.innerHTML = alertBox(error.message); return; }
   if (!data?.length) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon"><i class="fa-solid fa-circle-question"></i></div>
-        <div class="empty-state-title">No questions yet</div>
-        <p class="text-muted">Click "Add Question" to get started.</p>
+        <div class="empty-state-title">${category ? 'No questions in this category' : 'No questions yet'}</div>
+        <p class="text-muted">${category ? 'Choose another category or add a new question.' : 'Click "Add Question" to get started.'}</p>
       </div>`;
     return;
   }
@@ -1718,8 +1765,11 @@ async function loadQuestions() {
       </button>
     </div>
     ${data.map(q => `
-    <div class="question-item">
+    <div class="question-item" draggable="true" data-question-id="${esc(q.id)}">
       <div class="question-item-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder" title="Drag to reorder">
+          <i class="fa-solid fa-grip-vertical"></i>
+        </button>
         <label class="question-select" aria-label="Select question">
           <input type="checkbox" class="question-check" value="${esc(q.id)}" />
         </label>
@@ -1819,6 +1869,63 @@ async function loadQuestions() {
     });
   });
   updateBulkState();
+  bindQuestionDragAndDrop(container, category);
+}
+
+function bindQuestionDragAndDrop(container, category) {
+  let dragged = null;
+
+  container.querySelectorAll('.question-item[draggable="true"]').forEach(item => {
+    item.addEventListener('dragstart', event => {
+      dragged = item;
+      item.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', item.dataset.questionId || '');
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      container.querySelectorAll('.question-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+      persistQuestionOrder(container, category);
+      dragged = null;
+    });
+    item.addEventListener('dragover', event => {
+      event.preventDefault();
+      if (!dragged || dragged === item) return;
+      const rect = item.getBoundingClientRect();
+      const after = event.clientY > rect.top + rect.height / 2;
+      item.classList.add('drag-over');
+      if (after) item.after(dragged);
+      else item.before(dragged);
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', event => {
+      event.preventDefault();
+      item.classList.remove('drag-over');
+    });
+  });
+}
+
+async function persistQuestionOrder(container, category) {
+  const ids = Array.from(container.querySelectorAll('.question-item[data-question-id]'))
+    .map(item => item.dataset.questionId)
+    .filter(Boolean);
+  if (!ids.length) return;
+
+  const updates = ids.map((id, index) =>
+    sb.from('questions').update({ display_order: index + 1 }).eq('id', id)
+  );
+  const results = await Promise.all(updates);
+  const error = results.find(result => result.error)?.error;
+  if (error) {
+    if (/display_order|schema cache|column/i.test(error.message || '')) {
+      toast('Run the display_order schema update before question order can be saved.', 'warning', 5200);
+    } else {
+      toast('Could not save question order: ' + error.message, 'error');
+    }
+    loadQuestions(category);
+    return;
+  }
+  toast('Question order saved.', 'success', 1800);
 }
 
 function showQuestionModal(existing) {

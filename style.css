@@ -778,6 +778,14 @@ textarea.form-input { resize: vertical; min-height: 90px; }
   border-radius: var(--radius);
   padding: 1rem;
   margin-bottom: 0.65rem;
+  transition: border-color var(--transition), box-shadow var(--transition), opacity var(--transition);
+}
+.question-item.dragging {
+  opacity: 0.55;
+  box-shadow: var(--shadow-lg);
+}
+.question-item.drag-over {
+  border-color: var(--primary);
 }
 .question-item-header {
   display: flex;
@@ -788,6 +796,20 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .question-item-text    { flex: 1; font-size: 0.95rem; line-height: 1.65; min-width: 0; }
 .question-item-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .question-select { display: flex; align-items: flex-start; padding-top: 0.25rem; }
+.drag-handle {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  padding: 0.2rem 0.1rem;
+  line-height: 1;
+  font-size: 1rem;
+}
+.drag-handle:active { cursor: grabbing; }
+.drag-handle:hover { color: var(--primary); }
+.question-filter-select {
+  width: min(100%, 260px);
+}
 .question-check,
 .bulk-select-all input {
   width: 1rem;
