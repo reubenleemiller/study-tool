@@ -101,12 +101,16 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
   total_questions INTEGER NOT NULL DEFAULT 0,
   time_remaining  INTEGER NOT NULL DEFAULT 0,   -- seconds left when paused/completed
   time_limit      INTEGER NOT NULL DEFAULT 1800, -- seconds (0 = no limit)
+  time_expired    BOOLEAN NOT NULL DEFAULT FALSE,
   category        TEXT,
   started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at    TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE quiz_sessions
+  ADD COLUMN IF NOT EXISTS time_expired BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ─── updated_at trigger helper ─────────────────────────────
 CREATE OR REPLACE FUNCTION public.set_updated_at()

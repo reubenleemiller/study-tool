@@ -749,6 +749,8 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 }
 .badge-completed { background: #ebfbee; color: #2f9e44; }
 .badge-paused    { background: #fff3bf; color: #e67700; }
+.badge-progress  { background: #e7f5ff; color: #1971c2; }
+.badge-expired   { background: #fff5f5; color: #e03131; }
 .history-info    { flex: 1; min-width: 0; }
 .history-title   { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .history-meta    { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
@@ -804,6 +806,49 @@ textarea.form-input { resize: vertical; min-height: 90px; }
   gap: 0.45rem;
   font-size: 0.85rem;
   font-weight: 600;
+}
+.table-wrap {
+  overflow-x: auto;
+  width: 100%;
+}
+.session-table {
+  min-width: 980px;
+}
+.chart-panel {
+  width: 100%;
+}
+.score-chart {
+  width: 100%;
+  min-height: 220px;
+  margin-top: 0.75rem;
+}
+.score-chart svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+.chart-axis {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+.chart-area {
+  fill: rgba(34, 139, 230, 0.14);
+}
+.chart-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chart-point {
+  fill: var(--surface);
+  stroke: var(--primary);
+  stroke-width: 2.5;
+}
+.chart-label {
+  fill: var(--text-muted);
+  font-size: 0.7rem;
 }
 
 /* ----- Empty State ----- */

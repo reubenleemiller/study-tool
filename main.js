@@ -211,6 +211,10 @@ const PUBLIC_ROUTES  = new Set(['/login', '/set-password']);
 const ADMIN_ROUTES   = new Set(['/admin']);
 
 async function navigate(path) {
+  if (window.location.hash === '#' + path) {
+    await router();
+    return;
+  }
   window.location.hash = '#' + path;
 }
 
@@ -403,11 +407,11 @@ async function renderLoginPage() {
                 <span class="btn-text">Create Account</span>
               </button>
             </form>
-          </div>
-          <div class="auth-legal">
-            <a href="terms.html">Terms</a>
-            <span>&bull;</span>
-            <a href="privacy.html">Privacy</a>
+            <div class="auth-legal">
+              <a href="terms.html">Terms</a>
+              <span>&bull;</span>
+              <a href="privacy.html">Privacy</a>
+            </div>
           </div>
         </div>
       </div>
@@ -450,7 +454,6 @@ async function renderLoginPage() {
     { id: 'reg-p-digit',   test: v => /[0-9]/.test(v) },
     { id: 'reg-p-special', test: v => /[^A-Za-z0-9]/.test(v) },
   ];
-
   function setPolicyIcon(li, met) {
     const icon = li?.querySelector('.pi');
     if (!icon) return;
@@ -776,6 +779,8 @@ async function loadDashboardStats() {
 
   const completed = (sessions || []).filter(s => s.status === 'completed');
   const paused    = (sessions || []).filter(s => s.status === 'paused');
+  const inProgress= (sessions || []).filter(s => s.status === 'in_progress');
+  const resumable = [...inProgress, ...paused].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   const total     = completed.length;
   const avgPct    = total ? Math.round(completed.reduce((s, x) => s + pct(x), 0) / total) : 0;
@@ -789,15 +794,16 @@ async function loadDashboardStats() {
       ${statCard('star', bestPct + '%',  'Best Score')}
       ${statCard('pen', answered,        'Questions Answered')}
       ${statCard('pause', paused.length, 'Paused Quizzes')}
+      ${statCard('spinner', inProgress.length, 'In Progress')}
     </div>
 
-    ${paused.length ? `
+    ${resumable.length ? `
       <div class="card mb-2">
         <div class="card-header">
-          <div class="card-title"><i class="fa-solid fa-pause"></i> Paused Quizzes</div>
+          <div class="card-title"><i class="fa-solid fa-pause"></i> Resume Quizzes</div>
           <button class="btn btn-ghost btn-sm" onclick="navigate('/history')">View all →</button>
         </div>
-        <div class="history-list">${paused.slice(0, 3).map(historyItemHTML).join('')}</div>
+        <div class="history-list">${resumable.slice(0, 3).map(historyItemHTML).join('')}</div>
       </div>` : ''}
 
     ${completed.length ? `
@@ -825,15 +831,135 @@ function computeQuizStats(sessions) {
   const all = sessions || [];
   const completed = all.filter(s => s.status === 'completed');
   const paused = all.filter(s => s.status === 'paused');
+  const inProgress = all.filter(s => s.status === 'in_progress');
   const total = completed.length;
   return {
     completed,
     paused,
+    inProgress,
     total,
     avgPct: total ? Math.round(completed.reduce((sum, s) => sum + pct(s), 0) / total) : 0,
     bestPct: total ? Math.max(...completed.map(pct)) : 0,
     answered: completed.reduce((sum, s) => sum + (s.total_questions || 0), 0),
   };
+}
+function isTimeExpiredSession(session) {
+  return Boolean(session?.time_expired) ||
+    (session?.status === 'completed' && Number(session?.time_limit || 0) > 0 && Number(session?.time_remaining || 0) === 0);
+}
+function sessionStatusMeta(session) {
+  if (isTimeExpiredSession(session)) {
+    return { cls: 'badge-expired', icon: 'clock', label: 'Time Expired' };
+  }
+  if (session.status === 'paused') {
+    return { cls: 'badge-paused', icon: 'pause', label: 'Paused' };
+  }
+  if (session.status === 'in_progress') {
+    return { cls: 'badge-progress', icon: 'spinner', label: 'In Progress' };
+  }
+  return { cls: 'badge-completed', icon: 'circle-check', label: 'Done' };
+}
+function getSessionDisplayName(session, profilesById = new Map()) {
+  const profile = profilesById.get(session.user_id);
+  return profile?.full_name || profile?.email || session.user_id || 'Unknown user';
+}
+function csvCell(value) {
+  const text = String(value ?? '');
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+function downloadCSV(filename, rows) {
+  const csv = rows.map(row => row.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function sessionCSVRows(sessions, profilesById = new Map()) {
+  return [
+    ['User', 'Email', 'Status', 'Score', 'Percent', 'Category', 'Questions', 'Answered', 'Time Limit', 'Time Remaining', 'Time Expired', 'Started At', 'Completed At', 'Session ID'],
+    ...(sessions || []).map(session => {
+      const profile = profilesById.get(session.user_id) || {};
+      return [
+        profile.full_name || '',
+        profile.email || '',
+        sessionStatusMeta(session).label,
+        session.status === 'completed' ? `${session.score || 0}/${session.total_questions || 0}` : '',
+        session.status === 'completed' ? `${pct(session)}%` : '',
+        session.category || 'General',
+        session.total_questions || 0,
+        Object.keys(session.answers || {}).length,
+        formatTime(session.time_limit || 0),
+        formatTime(session.time_remaining || 0),
+        isTimeExpiredSession(session) ? 'Yes' : 'No',
+        formatDate(session.started_at || session.created_at),
+        formatDate(session.completed_at),
+        session.id,
+      ];
+    }),
+  ];
+}
+function renderAverageScoreChart(sessions, title = 'Average Score Over Time') {
+  const completed = (sessions || [])
+    .filter(s => s.status === 'completed')
+    .sort((a, b) => new Date(a.completed_at || a.created_at) - new Date(b.completed_at || b.created_at));
+
+  if (!completed.length) {
+    return `
+      <div class="chart-panel">
+        <div class="card-title"><i class="fa-solid fa-chart-line"></i> ${esc(title)}</div>
+        <div class="empty-state" style="padding:2rem 1rem">
+          <div class="empty-state-title">No completed quizzes yet</div>
+        </div>
+      </div>`;
+  }
+
+  let running = 0;
+  const points = completed.map((session, index) => {
+    running += pct(session);
+    return {
+      label: formatDate(session.completed_at || session.created_at),
+      avg: Math.round(running / (index + 1)),
+    };
+  });
+  const width = 680;
+  const height = 220;
+  const pad = 34;
+  const xStep = points.length > 1 ? (width - pad * 2) / (points.length - 1) : 0;
+  const coords = points.map((point, index) => {
+    const x = points.length > 1 ? pad + index * xStep : width / 2;
+    const y = height - pad - (point.avg / 100) * (height - pad * 2);
+    return { ...point, x, y };
+  });
+  const line = coords.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const area = `${pad},${height - pad} ${line} ${width - pad},${height - pad}`;
+  const latest = coords[coords.length - 1];
+
+  return `
+    <div class="chart-panel">
+      <div class="card-header">
+        <div class="card-title"><i class="fa-solid fa-chart-line"></i> ${esc(title)}</div>
+        <span class="role-badge role-student">${latest.avg}% latest avg</span>
+      </div>
+      <div class="score-chart" role="img" aria-label="${esc(title)}">
+        <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+          <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" class="chart-axis"></line>
+          <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" class="chart-axis"></line>
+          <text x="6" y="${pad + 4}" class="chart-label">100%</text>
+          <text x="14" y="${height - pad + 4}" class="chart-label">0%</text>
+          <polygon points="${area}" class="chart-area"></polygon>
+          <polyline points="${line}" class="chart-line"></polyline>
+          ${coords.map(p => `
+            <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" class="chart-point">
+              <title>${esc(p.label)}: ${p.avg}% average</title>
+            </circle>`).join('')}
+        </svg>
+      </div>
+    </div>`;
 }
 function statCard(icon, value, label) {
   return `<div class="stat-card">
@@ -855,7 +981,7 @@ async function renderQuizPage() {
     .from('quiz_sessions')
     .select('*')
     .eq('user_id', state.user.id)
-    .eq('status', 'paused')
+    .in('status', ['paused', 'in_progress'])
     .order('created_at', { ascending: false })
     .limit(3);
 
@@ -867,7 +993,7 @@ async function renderQuizPage() {
 
       ${paused?.length ? `
         <div class="card mb-2" style="border-color:var(--warning);border-width:2px">
-          <div class="card-title mb-1"><i class="fa-solid fa-pause"></i> Resume a Paused Quiz</div>
+          <div class="card-title mb-1"><i class="fa-solid fa-pause"></i> Resume a Quiz</div>
           <div class="history-list">${paused.map(historyItemHTML).join('')}</div>
         </div>` : ''}
 
@@ -996,6 +1122,10 @@ async function resumeQuiz(sessionId) {
   hidePreloader();
 
   if (error || !session) { toast('Could not load quiz session.', 'error'); return; }
+
+  if (session.status !== 'in_progress') {
+    await sb.from('quiz_sessions').update({ status: 'in_progress' }).eq('id', session.id);
+  }
 
   state.quiz = {
     sessionId:     session.id,
@@ -1180,7 +1310,7 @@ async function pauseQuiz() {
 
   state.quiz = null;
   toast('Quiz paused. Resume anytime from the Dashboard.', 'success');
-  navigate('/dashboard');
+  await navigate('/dashboard');
 }
 
 async function submitQuiz(timeExpired = false) {
@@ -1191,14 +1321,21 @@ async function submitQuiz(timeExpired = false) {
   let score = 0;
   q.questions.forEach(ques => { if (q.answers[ques.id] === ques.correct_answer) score++; });
 
-  const { error } = await sb.from('quiz_sessions').update({
+  const completedPayload = {
     status:        'completed',
     answers:       q.answers,
     score,
     current_index: q.currentIndex,
     time_remaining:q.timeRemaining,
     completed_at:  new Date().toISOString(),
-  }).eq('id', q.sessionId);
+    time_expired:  timeExpired,
+  };
+
+  let { error } = await sb.from('quiz_sessions').update(completedPayload).eq('id', q.sessionId);
+  if (error && /time_expired|schema cache|column/i.test(error.message || '')) {
+    delete completedPayload.time_expired;
+    ({ error } = await sb.from('quiz_sessions').update(completedPayload).eq('id', q.sessionId));
+  }
 
   if (error) { toast('Failed to save results: ' + error.message, 'error'); return; }
 
@@ -1307,6 +1444,7 @@ async function renderHistoryPage() {
         <button class="tab-item active" data-tab="all"       role="tab">All</button>
         <button class="tab-item"        data-tab="completed" role="tab">Completed</button>
         <button class="tab-item"        data-tab="paused"    role="tab">Paused</button>
+        <button class="tab-item"        data-tab="in_progress" role="tab">In Progress</button>
       </div>
       <div id="history-content">
         <div class="text-center mt-3"><div class="spinner-ring" style="margin:auto"></div></div>
@@ -1323,6 +1461,7 @@ async function renderHistoryPage() {
     let query = sb.from('quiz_sessions').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false });
     if (currentFilter === 'completed') query = query.eq('status', 'completed');
     if (currentFilter === 'paused')    query = query.eq('status', 'paused');
+    if (currentFilter === 'in_progress') query = query.eq('status', 'in_progress');
 
     const { data, error } = await query;
 
@@ -1375,26 +1514,26 @@ async function renderHistoryPage() {
 /** Build the HTML for a single history list item */
 function historyItemHTML(session, options = {}) {
   const isPaused  = session.status === 'paused';
+  const isActive = session.status === 'in_progress';
   const showResume = options.showResume !== false;
+  const meta = sessionStatusMeta(session);
   const scorePct  = session.total_questions > 0 ? Math.round(session.score / session.total_questions * 100) : 0;
   const progress  = `Q${(session.current_index || 0) + 1}/${session.total_questions}`;
 
   return `
     <div class="history-item">
-      <span class="history-badge ${isPaused ? 'badge-paused' : 'badge-completed'}">
-        ${isPaused
-          ? '<i class="fa-solid fa-pause"></i> Paused'
-          : '<i class="fa-solid fa-circle-check"></i> Done'}
+      <span class="history-badge ${meta.cls}">
+        <i class="fa-solid fa-${meta.icon}"></i> ${esc(meta.label)}
       </span>
       <div class="history-info">
         <div class="history-title">${esc(session.category || 'General')} &bull; ${session.total_questions} Qs</div>
         <div class="history-meta">${formatDate(session.created_at)}</div>
       </div>
-      <div class="history-score" style="${isPaused ? 'color:var(--warning)' : ''}">
-        ${isPaused ? progress : scorePct + '%'}
+      <div class="history-score" style="${isPaused || isActive ? 'color:var(--warning)' : ''}">
+        ${isPaused || isActive ? progress : scorePct + '%'}
       </div>
       <div class="history-actions">
-        ${isPaused && showResume ? `
+        ${(isPaused || isActive) && showResume ? `
           <button class="btn btn-primary btn-sm" data-resume="${esc(session.id)}" type="button">
             <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-play"></i> Resume</span>
           </button>` : ''}
@@ -1446,6 +1585,7 @@ async function renderAdminPage() {
       <div class="tab-bar" role="tablist">
         <button class="tab-item active" data-tab="questions" role="tab">Questions</button>
         <button class="tab-item"        data-tab="users"     role="tab">Users</button>
+        <button class="tab-item"        data-tab="history"   role="tab">Quiz History</button>
         <button class="tab-item"        data-tab="invite"    role="tab">Invite</button>
       </div>
       <div id="admin-content">
@@ -1456,6 +1596,7 @@ async function renderAdminPage() {
   const tabLoaders = {
     questions: () => renderQuestionsTab(document.getElementById('admin-content')),
     users:     () => renderUsersTab(document.getElementById('admin-content')),
+    history:   () => renderAdminHistoryTab(document.getElementById('admin-content')),
     invite:    () => renderInviteTab(document.getElementById('admin-content')),
   };
 
@@ -1867,6 +2008,10 @@ async function renderUserProfileView(container, user) {
       ${statCard('star', stats.bestPct + '%', 'Best Score')}
       ${statCard('pen', stats.answered, 'Questions Answered')}
       ${statCard('pause', stats.paused.length, 'Paused')}
+      ${statCard('spinner', stats.inProgress.length, 'In Progress')}
+    </div>
+    <div class="card mb-2">
+      ${renderAverageScoreChart(sessions || [], 'Average Score Over Time')}
     </div>
     <div class="card">
       <div class="card-header">
@@ -1881,6 +2026,111 @@ async function renderUserProfileView(container, user) {
     </div>`;
 
   bindHistoryItemActions(content, () => renderUserProfileView(container, user));
+}
+
+async function renderAdminHistoryTab(container) {
+  container.innerHTML = `
+    <div class="admin-section">
+      <div class="admin-section-title">Quiz History</div>
+      <div class="text-center mt-3"><div class="spinner-ring" style="margin:auto"></div></div>
+    </div>`;
+
+  const [{ data: profiles, error: profilesError }, { data: sessions, error: sessionsError }] = await Promise.all([
+    sb.from('profiles').select('id,email,full_name,role'),
+    sb.from('quiz_sessions').select('*').order('created_at', { ascending: false }),
+  ]);
+
+  if (profilesError || sessionsError) {
+    container.innerHTML = alertBox(profilesError?.message || sessionsError?.message || 'Could not load quiz history.');
+    return;
+  }
+
+  const profilesById = new Map((profiles || []).map(profile => [profile.id, profile]));
+  const allSessions = sessions || [];
+  const inProgress = allSessions.filter(session => session.status === 'in_progress');
+  const completed = allSessions.filter(session => session.status === 'completed');
+
+  container.innerHTML = `
+    <div class="admin-section">
+      <div class="page-header">
+        <div>
+          <div class="admin-section-title" style="margin-bottom:0.35rem">Quiz History</div>
+          <h3 class="page-title" style="font-size:1.25rem;margin:0">All User Sessions</h3>
+        </div>
+        <button class="btn btn-primary btn-sm" id="export-history-csv-btn" type="button">
+          <i class="fa-solid fa-file-csv"></i> Export CSV
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        ${statCard('spinner', inProgress.length, 'In Progress')}
+        ${statCard('pause', allSessions.filter(s => s.status === 'paused').length, 'Paused')}
+        ${statCard('circle-check', completed.length, 'Completed')}
+        ${statCard('clock', allSessions.filter(isTimeExpiredSession).length, 'Timed Out')}
+      </div>
+
+      <div class="card mb-2">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-spinner"></i> In Progress Quizzes</div>
+        </div>
+        ${inProgress.length
+          ? `<div class="history-list">${inProgress.map(session => `
+              <div class="history-item">
+                <span class="history-badge badge-progress"><i class="fa-solid fa-spinner"></i> In Progress</span>
+                <div class="history-info">
+                  <div class="history-title">${esc(getSessionDisplayName(session, profilesById))}</div>
+                  <div class="history-meta">${esc(session.category || 'General')} &bull; ${formatDate(session.started_at || session.created_at)}</div>
+                </div>
+                <div class="history-score" style="color:var(--warning)">Q${(session.current_index || 0) + 1}/${session.total_questions || 0}</div>
+              </div>`).join('')}</div>`
+          : `<div class="empty-state" style="padding:2rem 1rem">
+              <div class="empty-state-title">No quizzes currently in progress</div>
+            </div>`}
+      </div>
+
+      <div class="card mb-2">
+        ${renderAverageScoreChart(completed, 'Overall Average Score Over Time')}
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-table"></i> Exportable Quiz History</div>
+          <span class="text-muted" style="font-size:0.85rem">${allSessions.length} sessions</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table session-table">
+            <thead>
+              <tr>
+                <th>User</th><th>Status</th><th>Score</th><th>Category</th><th>Progress</th><th>Time</th><th>Started</th><th>Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allSessions.map(session => {
+                const meta = sessionStatusMeta(session);
+                return `
+                  <tr>
+                    <td>
+                      <div style="font-weight:600">${esc(getSessionDisplayName(session, profilesById))}</div>
+                      <div class="text-muted" style="font-size:0.78rem">${esc(profilesById.get(session.user_id)?.email || '')}</div>
+                    </td>
+                    <td><span class="history-badge ${meta.cls}"><i class="fa-solid fa-${meta.icon}"></i> ${esc(meta.label)}</span></td>
+                    <td>${session.status === 'completed' ? `${esc(session.score || 0)}/${esc(session.total_questions || 0)} (${pct(session)}%)` : '—'}</td>
+                    <td>${esc(session.category || 'General')}</td>
+                    <td>${Object.keys(session.answers || {}).length}/${esc(session.total_questions || 0)} answered</td>
+                    <td>${formatTime(session.time_remaining || 0)} / ${formatTime(session.time_limit || 0)}</td>
+                    <td>${formatDate(session.started_at || session.created_at)}</td>
+                    <td>${formatDate(session.completed_at)}</td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('export-history-csv-btn')?.addEventListener('click', () => {
+    downloadCSV(`studytool-quiz-history-${new Date().toISOString().slice(0, 10)}.csv`, sessionCSVRows(allSessions, profilesById));
+  });
 }
 
 // ── Invite tab ──
