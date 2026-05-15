@@ -784,6 +784,28 @@ textarea.form-input { resize: vertical; min-height: 90px; }
   letter-spacing: 0.08em;
   margin-bottom: 1rem;
 }
+.question-admin-actions,
+.import-template-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.import-template-actions {
+  margin: -0.25rem 0 1rem;
+}
+.import-error-list {
+  white-space: pre-wrap;
+  background: #fff5f5;
+  color: var(--danger);
+  border: 1px solid #ffc9c9;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  max-height: 220px;
+  overflow: auto;
+}
 .question-item {
   background: var(--surface);
   border: 1px solid var(--border);

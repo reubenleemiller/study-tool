@@ -29,6 +29,32 @@ const state = {
 };
 
 const QUESTION_IMAGE_BUCKET = 'question-images';
+const QUESTION_IMPORT_TEMPLATE_COLUMNS = [
+  'question_text',
+  'option_a',
+  'option_b',
+  'option_c',
+  'option_d',
+  'correct_answer',
+  'category',
+  'difficulty',
+  'explanation',
+  'image_url',
+];
+const QUESTION_IMPORT_TEMPLATE_ROWS = [
+  {
+    question_text: 'What is 2 + 2?',
+    option_a: '3',
+    option_b: '4',
+    option_c: '5',
+    option_d: '6',
+    correct_answer: 'B',
+    category: 'Math',
+    difficulty: 'easy',
+    explanation: '2 + 2 equals 4.',
+    image_url: '',
+  },
+];
 
 // ============================================================
 // SECTION 2: Utility Helpers
@@ -125,6 +151,309 @@ function questionImageStoragePath(url) {
   } catch {
     return '';
   }
+}
+
+function normalizeImportHeader(header) {
+  return String(header || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^\uFEFF/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function getImportCell(row, names) {
+  for (const name of names) {
+    if (Object.prototype.hasOwnProperty.call(row, name)) return String(row[name] ?? '').trim();
+  }
+  return '';
+}
+
+function csvEscape(value) {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function rowsToCsv(columns, rows) {
+  return [
+    columns.map(csvEscape).join(','),
+    ...rows.map(row => columns.map(column => csvEscape(row[column])).join(',')),
+  ].join('\r\n');
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(field);
+      field = '';
+    } else if (ch === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else if (ch !== '\r') {
+      field += ch;
+    }
+  }
+
+  if (inQuotes) throw new Error('CSV has an unterminated quoted field.');
+  row.push(field);
+  if (row.some(cell => cell.trim() !== '') || rows.length) rows.push(row);
+  return rows.filter(cells => cells.some(cell => String(cell).trim() !== ''));
+}
+
+function normalizeQuestionImportRows(csvText) {
+  const parsed = parseCsv(csvText);
+  if (!parsed.length) throw new Error('The CSV file is empty.');
+
+  const headers = parsed[0].map(normalizeImportHeader);
+  const headerIndex = new Map();
+  headers.forEach((header, index) => {
+    if (header && !headerIndex.has(header)) headerIndex.set(header, index);
+  });
+
+  const required = ['question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer'];
+  const missing = required.filter(header => !headerIndex.has(header));
+  if (missing.length) {
+    throw new Error(`Missing required column${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}`);
+  }
+
+  const errors = [];
+  const questions = [];
+  parsed.slice(1).forEach((cells, index) => {
+    const rowNumber = index + 2;
+    const row = {};
+    headerIndex.forEach((cellIndex, header) => {
+      row[header] = cells[cellIndex] ?? '';
+    });
+
+    const questionText = sanitizeQuestionHTML(getImportCell(row, ['question_text', 'question', 'prompt']));
+    const optionA = getImportCell(row, ['option_a', 'a']);
+    const optionB = getImportCell(row, ['option_b', 'b']);
+    const optionC = getImportCell(row, ['option_c', 'c']);
+    const optionD = getImportCell(row, ['option_d', 'd']);
+    const correct = getImportCell(row, ['correct_answer', 'answer', 'correct']).toUpperCase();
+    const difficulty = getImportCell(row, ['difficulty']).toLowerCase() || 'medium';
+    const category = getImportCell(row, ['category']);
+    const explanation = sanitizeQuestionHTML(getImportCell(row, ['explanation', 'rationale']));
+    const imageUrl = getImportCell(row, ['image_url', 'image']);
+
+    if (!questionText) errors.push(`Row ${rowNumber}: question_text is required.`);
+    if (!optionA || !optionB || !optionC || !optionD) errors.push(`Row ${rowNumber}: option_a through option_d are required.`);
+    if (!['A', 'B', 'C', 'D'].includes(correct)) errors.push(`Row ${rowNumber}: correct_answer must be A, B, C, or D.`);
+    if (!['easy', 'medium', 'hard'].includes(difficulty)) errors.push(`Row ${rowNumber}: difficulty must be easy, medium, or hard.`);
+
+    if (!questionText || !optionA || !optionB || !optionC || !optionD || !['A', 'B', 'C', 'D'].includes(correct) || !['easy', 'medium', 'hard'].includes(difficulty)) {
+      return;
+    }
+
+    questions.push({
+      question_text: questionText,
+      options: { A: optionA, B: optionB, C: optionC, D: optionD },
+      correct_answer: correct,
+      category: category || null,
+      difficulty,
+      explanation: explanation || null,
+      image_url: imageUrl || null,
+      created_by: state.user.id,
+    });
+  });
+
+  if (errors.length) {
+    const shown = errors.slice(0, 8).join('\n');
+    const extra = errors.length > 8 ? `\n...and ${errors.length - 8} more.` : '';
+    throw new Error(shown + extra);
+  }
+  if (!questions.length) throw new Error('No question rows were found after the header.');
+  return questions;
+}
+
+function downloadBlob(filename, mimeType, content) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadQuestionCsvTemplate() {
+  downloadBlob(
+    'question-import-template.csv',
+    'text/csv;charset=utf-8',
+    rowsToCsv(QUESTION_IMPORT_TEMPLATE_COLUMNS, QUESTION_IMPORT_TEMPLATE_ROWS)
+  );
+}
+
+function crc32(bytes) {
+  if (!crc32.table) {
+    crc32.table = Array.from({ length: 256 }, (_, n) => {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      return c >>> 0;
+    });
+  }
+  let c = 0xFFFFFFFF;
+  bytes.forEach(byte => { c = crc32.table[(c ^ byte) & 0xFF] ^ (c >>> 8); });
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function createStoredZip(entries) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+
+  function u16(value) {
+    const bytes = new Uint8Array(2);
+    new DataView(bytes.buffer).setUint16(0, value, true);
+    return bytes;
+  }
+  function u32(value) {
+    const bytes = new Uint8Array(4);
+    new DataView(bytes.buffer).setUint32(0, value, true);
+    return bytes;
+  }
+  function push(target, ...parts) {
+    parts.forEach(part => target.push(part));
+  }
+  function size(parts) {
+    return parts.reduce((sum, part) => sum + part.length, 0);
+  }
+
+  entries.forEach(entry => {
+    const name = encoder.encode(entry.name);
+    const data = typeof entry.content === 'string' ? encoder.encode(entry.content) : entry.content;
+    const crc = crc32(data);
+    const local = [];
+    push(
+      local,
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc),
+      u32(data.length), u32(data.length), u16(name.length), u16(0), name, data
+    );
+    push(chunks, ...local);
+
+    const centralEntry = [];
+    push(
+      centralEntry,
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc),
+      u32(data.length), u32(data.length), u16(name.length), u16(0), u16(0), u16(0), u16(0),
+      u32(0), u32(offset), name
+    );
+    push(central, ...centralEntry);
+    offset += size(local);
+  });
+
+  const centralSize = size(central);
+  const end = [
+    u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length),
+    u32(centralSize), u32(offset), u16(0),
+  ];
+  return new Blob([...chunks, ...central, ...end], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
+function xmlEscape(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function columnName(index) {
+  let name = '';
+  let n = index + 1;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    name = String.fromCharCode(65 + rem) + name;
+    n = Math.floor((n - 1) / 26);
+  }
+  return name;
+}
+
+function worksheetXml(columns, rows) {
+  const allRows = [columns, ...rows.map(row => columns.map(column => row[column] ?? ''))];
+  const sheetRows = allRows.map((cells, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    const cellXml = cells.map((cell, cellIndex) => {
+      const ref = `${columnName(cellIndex)}${rowNumber}`;
+      return `<c r="${ref}" t="inlineStr"><is><t>${xmlEscape(cell)}</t></is></c>`;
+    }).join('');
+    return `<row r="${rowNumber}">${cellXml}</row>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetData>${sheetRows}</sheetData>
+</worksheet>`;
+}
+
+function downloadQuestionXlsxTemplate() {
+  const blob = createStoredZip([
+    {
+      name: '[Content_Types].xml',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`,
+    },
+    {
+      name: '_rels/.rels',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    },
+    {
+      name: 'xl/workbook.xml',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Questions" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`,
+    },
+    {
+      name: 'xl/_rels/workbook.xml.rels',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`,
+    },
+    {
+      name: 'xl/worksheets/sheet1.xml',
+      content: worksheetXml(QUESTION_IMPORT_TEMPLATE_COLUMNS, QUESTION_IMPORT_TEMPLATE_ROWS),
+    },
+  ]);
+  downloadBlob('question-import-template.xlsx', blob.type, blob);
 }
 
 async function removeQuestionImages(questions) {
@@ -1749,12 +2078,25 @@ async function renderAdminPage() {
 // ── Questions tab ──
 async function renderQuestionsTab(container) {
   container.innerHTML = `
-    <div class="admin-section">
+      <div class="admin-section">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
         <div class="admin-section-title">MCQ Questions</div>
-        <button class="btn btn-primary btn-sm" id="add-q-btn" type="button">
-          <span class="btn-spinner"></span><span class="btn-text">+ Add Question</span>
-        </button>
+        <div class="question-admin-actions">
+          <button class="btn btn-outline btn-sm" id="download-csv-template-btn" type="button">
+            <i class="fa-solid fa-file-csv"></i>
+            <span>CSV Template</span>
+          </button>
+          <button class="btn btn-outline btn-sm" id="download-xlsx-template-btn" type="button">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>XLSX Template</span>
+          </button>
+          <button class="btn btn-outline btn-sm" id="import-q-btn" type="button">
+            <span class="btn-spinner"></span><span class="btn-text"><i class="fa-solid fa-file-import"></i> Import CSV</span>
+          </button>
+          <button class="btn btn-primary btn-sm" id="add-q-btn" type="button">
+            <span class="btn-spinner"></span><span class="btn-text">+ Add Question</span>
+          </button>
+        </div>
       </div>
       <div class="bulk-toolbar">
         <label class="bulk-select-all" for="question-category-filter">
@@ -1772,6 +2114,9 @@ async function renderQuestionsTab(container) {
     </div>`;
 
   document.getElementById('add-q-btn')?.addEventListener('click', () => showQuestionModal(null));
+  document.getElementById('import-q-btn')?.addEventListener('click', () => showQuestionImportModal());
+  document.getElementById('download-csv-template-btn')?.addEventListener('click', downloadQuestionCsvTemplate);
+  document.getElementById('download-xlsx-template-btn')?.addEventListener('click', downloadQuestionXlsxTemplate);
   await populateQuestionCategoryFilter();
   document.getElementById('question-category-filter')?.addEventListener('change', event => {
     loadQuestions(event.target.value);
@@ -2020,6 +2365,85 @@ async function persistQuestionOrder(container, category) {
     return;
   }
   toast('Question order saved.', 'success', 1800);
+}
+
+function showQuestionImportModal() {
+  showModal({
+    title: 'Import Questions',
+    body: `
+      <div class="form-group">
+        <label class="form-label" for="question-import-file">CSV File</label>
+        <div class="file-upload-control">
+          <input class="file-upload-input" type="file" id="question-import-file" accept=".csv,text/csv" />
+          <label class="file-upload-btn" for="question-import-file">
+            <i class="fa-solid fa-file-csv"></i>
+            <span>Choose CSV</span>
+          </label>
+          <span class="file-upload-name" id="question-import-name">No file selected</span>
+        </div>
+        <div class="form-hint">
+          Required columns: <code>question_text</code>, <code>option_a</code>, <code>option_b</code>, <code>option_c</code>, <code>option_d</code>, <code>correct_answer</code>.
+          Optional columns: <code>category</code>, <code>difficulty</code>, <code>explanation</code>, <code>image_url</code>.
+        </div>
+      </div>
+      <div class="import-template-actions">
+        <button class="btn btn-outline btn-sm" id="modal-csv-template-btn" type="button">
+          <i class="fa-solid fa-file-csv"></i>
+          <span>CSV Template</span>
+        </button>
+        <button class="btn btn-outline btn-sm" id="modal-xlsx-template-btn" type="button">
+          <i class="fa-solid fa-file-excel"></i>
+          <span>XLSX Template</span>
+        </button>
+      </div>
+      <pre class="import-error-list" id="question-import-errors" hidden></pre>`,
+    actions: [
+      { id: 'cancel', label: 'Cancel', cls: 'btn-outline', handler: (_, close) => close() },
+      {
+        id: 'import', label: 'Import Questions', cls: 'btn-primary',
+        handler: async (btn, close) => {
+          const file = document.getElementById('question-import-file')?.files?.[0];
+          const errorBox = document.getElementById('question-import-errors');
+          if (errorBox) {
+            errorBox.hidden = true;
+            errorBox.textContent = '';
+          }
+          if (!file) {
+            toast('Choose a CSV file to import.', 'error');
+            return;
+          }
+
+          btnLoading(btn, true);
+          try {
+            const text = await file.text();
+            const questions = normalizeQuestionImportRows(text);
+            const { error } = await sb.from('questions').insert(questions);
+            if (error) throw error;
+            btnLoading(btn, false);
+            close();
+            toast(`${questions.length} question${questions.length === 1 ? '' : 's'} imported.`, 'success');
+            await populateQuestionCategoryFilter();
+            loadQuestions();
+          } catch (err) {
+            btnLoading(btn, false);
+            if (errorBox) {
+              errorBox.textContent = err.message || 'Import failed.';
+              errorBox.hidden = false;
+            }
+            toast('Import failed. Check the details in the dialog.', 'error', 5200);
+          }
+        },
+      },
+    ],
+  });
+
+  document.getElementById('modal-csv-template-btn')?.addEventListener('click', downloadQuestionCsvTemplate);
+  document.getElementById('modal-xlsx-template-btn')?.addEventListener('click', downloadQuestionXlsxTemplate);
+  document.getElementById('question-import-file')?.addEventListener('change', event => {
+    const file = event.target.files?.[0];
+    const name = document.getElementById('question-import-name');
+    if (name) name.textContent = file?.name || 'No file selected';
+  });
 }
 
 function showQuestionModal(existing) {
