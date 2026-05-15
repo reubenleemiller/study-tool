@@ -2461,6 +2461,7 @@ function showQuestionModal(existing) {
           <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertUnorderedList" data-editor-target="qm-text" title="Bullets"><i class="fa-solid fa-list-ul"></i></button>
           <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertOrderedList" data-editor-target="qm-text" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
           <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="highlight" data-editor-target="qm-text" title="Highlight"><i class="fa-solid fa-highlighter"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-html-toggle="qm-text" title="View as HTML"><i class="fa-solid fa-code"></i> HTML</button>
         </div>
         <div class="rich-editor" id="qm-text" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Enter question...">${questionTextHTML(existing?.question_text || '')}</div>
       </div>
@@ -2518,6 +2519,7 @@ function showQuestionModal(existing) {
           <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertUnorderedList" data-editor-target="qm-exp" title="Bullets"><i class="fa-solid fa-list-ul"></i></button>
           <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="insertOrderedList" data-editor-target="qm-exp" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
           <button class="btn btn-outline btn-sm" type="button" data-editor-cmd="highlight" data-editor-target="qm-exp" title="Highlight"><i class="fa-solid fa-highlighter"></i></button>
+          <button class="btn btn-outline btn-sm" type="button" data-editor-html-toggle="qm-exp" title="View as HTML"><i class="fa-solid fa-code"></i> HTML</button>
         </div>
         <div class="rich-editor" id="qm-exp" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Explain the correct answer...">${questionTextHTML(existing?.explanation || '')}</div>
       </div>
@@ -2531,14 +2533,19 @@ function showQuestionModal(existing) {
         id: 'save', label: isEdit ? 'Save Changes' : 'Add Question', cls: 'btn-primary',
         handler: async (btn, close) => {
           const editor = document.getElementById('qm-text');
-          const qText = sanitizeQuestionHTML(editor?.innerHTML || '');
+          const qText = sanitizeQuestionHTML(
+            editor?.dataset.mode === 'html' ? editor.textContent || '' : editor?.innerHTML || ''
+          );
           const optA  = document.getElementById('qm-a')?.value.trim();
           const optB  = document.getElementById('qm-b')?.value.trim();
           const optC  = document.getElementById('qm-c')?.value.trim();
           const optD  = document.getElementById('qm-d')?.value.trim();
           const correct  = document.getElementById('qm-correct')?.value;
           const category = document.getElementById('qm-cat')?.value.trim();
-          const exp      = sanitizeQuestionHTML(document.getElementById('qm-exp')?.innerHTML || '');
+          const expEditor = document.getElementById('qm-exp');
+          const exp      = sanitizeQuestionHTML(
+            expEditor?.dataset.mode === 'html' ? expEditor.textContent || '' : expEditor?.innerHTML || ''
+          );
 
           if (!qText || !optA || !optB || !optC || !optD) {
             toast('Please fill in all required fields.', 'error');
@@ -2600,9 +2607,15 @@ function setupQuestionEditor() {
   const imageName = document.getElementById('qm-image-name');
   if (!editor || !preview) return;
 
+  function editorHTML(target) {
+    return target.dataset.mode === 'html'
+      ? sanitizeQuestionHTML(target.textContent || '')
+      : sanitizeQuestionHTML(target.innerHTML || '');
+  }
+
   function updatePreview() {
-    const html = sanitizeQuestionHTML(editor.innerHTML);
-    const explanationHTML = sanitizeQuestionHTML(explanationEditor?.innerHTML || '');
+    const html = editorHTML(editor);
+    const explanationHTML = explanationEditor ? editorHTML(explanationEditor) : '';
     const imageUrl = document.getElementById('qm-image-url')?.value;
     preview.innerHTML = `
       <div class="question-text">${html || '<span class="text-muted">Question preview appears here.</span>'}</div>
@@ -2614,6 +2627,7 @@ function setupQuestionEditor() {
   document.querySelectorAll('[data-editor-cmd]').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = document.getElementById(btn.dataset.editorTarget || 'qm-text') || editor;
+      if (target.dataset.mode === 'html') return;
       target.focus();
       const cmd = btn.dataset.editorCmd;
       if (cmd === 'highlight') {
@@ -2622,6 +2636,31 @@ function setupQuestionEditor() {
         document.execCommand(cmd, false, null);
       }
       updatePreview();
+    });
+  });
+
+  document.querySelectorAll('[data-editor-html-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.editorHtmlToggle || '');
+      if (!target) return;
+      const toHtml = target.dataset.mode !== 'html';
+
+      if (toHtml) {
+        target.textContent = sanitizeQuestionHTML(target.innerHTML || '');
+        target.dataset.mode = 'html';
+        target.classList.add('html-mode');
+        btn.classList.add('active');
+        btn.title = 'View as rich text';
+      } else {
+        target.innerHTML = sanitizeQuestionHTML(target.textContent || '');
+        delete target.dataset.mode;
+        target.classList.remove('html-mode');
+        btn.classList.remove('active');
+        btn.title = 'View as HTML';
+      }
+
+      updatePreview();
+      target.focus();
     });
   });
 
