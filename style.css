@@ -103,8 +103,16 @@ img { max-width: 100%; }
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  flex-shrink: 0;
 }
-.app-nav { display: flex; gap: 0.2rem; align-items: center; }
+.app-nav {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
 .nav-btn {
   background: none;
   border: none;
@@ -119,7 +127,17 @@ img { max-width: 100%; }
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  flex-shrink: 0;
 }
+.nav-btn i { flex-shrink: 0; }
+.app-nav.icon-only .nav-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+.app-nav.icon-only .nav-label { display: none; }
 .nav-btn:hover  { background: var(--primary-light); color: var(--primary); }
 .nav-btn.active { background: var(--primary-light); color: var(--primary); }
 .nav-btn.danger-nav:hover { background: #fff5f5; color: var(--danger); }

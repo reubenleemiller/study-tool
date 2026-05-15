@@ -668,6 +668,7 @@ async function router() {
   const fn = renderers[path];
   if (fn) {
     await fn();
+    scheduleFitAppNavLabels();
   } else {
     navigate(state.user ? '/dashboard' : '/login');
   }
@@ -676,6 +677,7 @@ async function router() {
 }
 
 window.addEventListener('hashchange', router);
+window.addEventListener('resize', () => scheduleFitAppNavLabels());
 
 // ============================================================
 // SECTION 5: Auth — Login / Register
@@ -1087,20 +1089,22 @@ async function signOut() {
 function headerHTML(activePath) {
   const isAdmin = state.profile?.role === 'admin';
   const links = [
-    { path: '/dashboard', label: '<i class="fa-solid fa-gauge-high"></i> Dashboard' },
-    { path: '/quiz',      label: '<i class="fa-solid fa-list-check"></i> Take Quiz'  },
-    { path: '/history',   label: '<i class="fa-solid fa-clock-rotate-left"></i> History' },
-    ...(isAdmin ? [{ path: '/admin', label: '<i class="fa-solid fa-gear"></i> Admin' }] : []),
+    { path: '/dashboard', icon: 'gauge-high', text: 'Dashboard' },
+    { path: '/quiz',      icon: 'list-check', text: 'Take Quiz'  },
+    { path: '/history',   icon: 'clock-rotate-left', text: 'History' },
+    ...(isAdmin ? [{ path: '/admin', icon: 'gear', text: 'Admin' }] : []),
   ];
+
+  const navLabel = item => `<i class="fa-solid fa-${item.icon}" aria-hidden="true"></i><span class="nav-label">${esc(item.text)}</span>`;
 
   const navItems = links.map(l =>
     `<button class="nav-btn${activePath === l.path ? ' active' : ''}"
-             onclick="navigate('${l.path}')">${l.label}</button>`
+             onclick="navigate('${l.path}')" aria-label="${esc(l.text)}">${navLabel(l)}</button>`
   ).join('');
 
   const mobileItems = links.map(l =>
     `<button class="nav-btn${activePath === l.path ? ' active' : ''}"
-             onclick="navigate('${l.path}');_closeMobileMenu()">${l.label}</button>`
+             onclick="navigate('${l.path}');_closeMobileMenu()" aria-label="${esc(l.text)}">${navLabel(l)}</button>`
   ).join('');
 
   return `
@@ -1108,8 +1112,8 @@ function headerHTML(activePath) {
       <div class="app-logo"><i class="fa-solid fa-book-open"></i> ${esc(APP.name)}</div>
       <nav class="app-nav" aria-label="Main navigation">
         ${navItems}
-        <button class="nav-btn danger-nav" onclick="_confirmSignOut()">
-          <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+        <button class="nav-btn danger-nav" onclick="_confirmSignOut()" aria-label="Sign Out">
+          <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span class="nav-label">Sign Out</span>
         </button>
       </nav>
       <button class="hamburger" id="hamburger-btn" aria-label="Open menu" onclick="_toggleMobileMenu()">
@@ -1118,10 +1122,25 @@ function headerHTML(activePath) {
     </header>
     <div class="mobile-menu" id="mobile-menu" role="navigation" aria-label="Mobile navigation">
       ${mobileItems}
-      <button class="nav-btn danger-nav" onclick="_confirmSignOut()">
-        <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+      <button class="nav-btn danger-nav" onclick="_confirmSignOut()" aria-label="Sign Out">
+        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span class="nav-label">Sign Out</span>
       </button>
     </div>`;
+}
+
+function fitAppNavLabels() {
+  const header = document.querySelector('.app-header');
+  const nav = document.querySelector('.app-nav');
+  if (!header || !nav || getComputedStyle(nav).display === 'none') return;
+
+  nav.classList.remove('icon-only');
+  if (nav.scrollWidth > nav.clientWidth || header.scrollWidth > header.clientWidth) {
+    nav.classList.add('icon-only');
+  }
+}
+
+function scheduleFitAppNavLabels() {
+  requestAnimationFrame(() => requestAnimationFrame(fitAppNavLabels));
 }
 
 // Expose nav helpers to inline onclick attributes
